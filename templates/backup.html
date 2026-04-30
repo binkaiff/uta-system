@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UTA Manpower Service - Backup</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="sidebar">
+            <div class="logo"><div class="logo-icon"><img src="{{ url_for('static', filename='logo.png') }}" alt="UTA Logo" onerror="this.style.display='none'; this.parentElement.innerHTML='<i class=\'fas fa-briefcase\'></i>'"></div><h2>UTA</h2><p>Manpower Service</p><div class="license-badge">SLBFE Licensed</div></div>
+            <nav class="nav-menu">
+                <a href="/dashboard" class="nav-item"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+                <a href="/enter" class="nav-item"><i class="fas fa-plus-circle"></i><span>Enter Records</span></a>
+                <a href="/view" class="nav-item"><i class="fas fa-table-list"></i><span>View Records</span></a>
+                <a href="/backup" class="nav-item active"><i class="fas fa-box-archive"></i><span>Backup</span></a>
+                <a href="/logout" class="nav-item logout-link" onclick="sessionStorage.removeItem('uta_logged_in')"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+            </nav>
+            <div class="sidebar-footer"><div class="year">2026</div><div class="version">v3.0</div></div>
+        </div>
+
+        <div class="main-content">
+            <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+            <div class="header"><div class="header-title"><h1>Backup</h1><p>Deleted monthly files are stored here</p></div><div class="header-actions"><div class="date-display"><i class="far fa-calendar-alt"></i><span id="currentDate"></span></div></div></div>
+
+            {% if backup_months %}
+                <div class="months-grid">
+                    {% for month_name, month_data in backup_months.items() %}
+                    <div class="month-card-item">
+                        <div class="month-card-header"><div class="month-icon-circle"><i class="fas fa-box-archive"></i></div><div class="month-year-tag">Backup</div></div>
+                        <div class="month-card-body">
+                            <h3 class="month-name-text">{{ month_data.display_name }}</h3>
+                            <div class="month-details-list">
+                                <div class="detail-line"><i class="fas fa-calendar-plus"></i><span>Created: {{ month_data.created_date[:10] }}</span></div>
+                                <div class="detail-line"><i class="fas fa-trash-alt"></i><span>Deleted: {{ month_data.deleted_date[:10] }}</span></div>
+                                <div class="detail-line"><span>Opening: {{ month_data.opening_balance|amount }}</span></div>
+                            </div>
+                            <button type="button" class="month-status-tag closed-status backup-restore-btn" onclick="restoreBackupMonth('{{ month_name }}')"><i class="fas fa-box-archive"></i> BACKUP</button>
+                        </div>
+                        <div class="month-card-footer"><button class="delete-month-btn" onclick="deleteBackupMonth('{{ month_name }}', '{{ month_data.display_name }}')"><i class="fas fa-trash-alt"></i> Delete from Backup</button></div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state-container"><div class="empty-state-card"><div class="empty-state-icon"><i class="fas fa-box-open"></i></div><h2>No Backup Files</h2><p>Deleted monthly files will appear here.</p></div></div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div id="deleteModal" class="modal"><div class="modal-container"><div class="modal-warning-icon"><i class="fas fa-exclamation-triangle"></i></div><h3 class="modal-title">Delete Backup</h3><p class="modal-message" id="deleteMessage">Are you sure you want to permanently delete this backup?</p><div class="modal-buttons"><button onclick="confirmDeleteBackupMonth()" class="modal-delete-btn"><i class="fas fa-trash-alt"></i> Delete Permanently</button><button onclick="closeDeleteModal()" class="modal-cancel-btn"><i class="fas fa-times"></i> Cancel</button></div></div></div>
+    <div id="toastMessage" class="toast-message"></div>
+    <script>
+        let pendingDelete = null;
+        function restoreBackupMonth(monthName) { fetch('/restore_backup_month', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month_name: monthName }) }).then(response => response.json()).then(data => { if (data.success) { showToast(data.message, 'success'); setTimeout(() => window.location.href = '/view', 800); } else { showToast('Error: ' + data.message, 'error'); } }).catch(() => showToast('Error restoring backup', 'error')); }
+        function deleteBackupMonth(monthName, monthDisplay) { pendingDelete = monthName; document.getElementById('deleteMessage').innerHTML = `Are you sure you want to permanently delete <strong>${monthDisplay}</strong> from Backup?`; document.getElementById('deleteModal').style.display = 'flex'; }
+        function confirmDeleteBackupMonth() { if (!pendingDelete) return; fetch('/delete_backup_month', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month_name: pendingDelete }) }).then(response => response.json()).then(data => { if (data.success) { showToast(data.message, 'success'); setTimeout(() => location.reload(), 1000); } else { showToast('Error: ' + data.message, 'error'); } closeDeleteModal(); }).catch(() => { showToast('Error deleting backup', 'error'); closeDeleteModal(); }); }
+        function closeDeleteModal() { document.getElementById('deleteModal').style.display = 'none'; pendingDelete = null; }
+        function updateDate() { const now = new Date(); document.getElementById('currentDate').textContent = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); }
+        function showToast(message, type) { const toast = document.getElementById('toastMessage'); toast.innerHTML = '<i class="fas fa-' + (type === 'success' ? 'check-circle' : 'exclamation-circle') + '"></i> ' + message; toast.className = 'toast-message ' + type; toast.style.display = 'flex'; setTimeout(() => { toast.style.display = 'none'; }, 3000); }
+        function toggleSidebar() { const sidebar = document.querySelector('.sidebar'); if (sidebar) sidebar.classList.toggle('active'); }
+        updateDate();
+        if (!sessionStorage.getItem('uta_logged_in')) { window.location.replace('/logout'); }
+    </script>
+</body>
+</html>

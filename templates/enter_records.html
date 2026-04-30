@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UTA Manpower Service - Enter Records</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="sidebar">
+            <div class="logo">
+                <div class="logo-icon">
+                    <img src="{{ url_for('static', filename='logo.png') }}" alt="UTA Logo" onerror="this.style.display='none'; this.parentElement.innerHTML='<i class=\'fas fa-briefcase\'></i>'">
+                </div>
+                <h2>UTA</h2>
+                <p>Manpower Service</p>
+                <div class="license-badge">SLBFE Licensed</div>
+            </div>
+            <nav class="nav-menu">
+                <a href="/dashboard" class="nav-item">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="/enter" class="nav-item active">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>Enter Records</span>
+                </a>
+                <a href="/view" class="nav-item">
+                    <i class="fas fa-table-list"></i>
+                    <span>View Records</span>
+                </a>
+                <a href="/backup" class="nav-item">
+                    <i class="fas fa-box-archive"></i>
+                    <span>Backup</span>
+                </a>
+            
+                <a href="/logout" class="nav-item logout-link" onclick="sessionStorage.removeItem('uta_logged_in')">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="year">2026</div>
+                <div class="version">v3.0</div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+            <div class="header">
+                <div class="header-title">
+                    <h1>Enter Daily Records</h1>
+                    <p>Active Month: <strong>{{ month_display }}</strong></p>
+                </div>
+                <div class="header-actions">
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                    <div class="ref-preview" id="nextRefPreview">
+                        <i class="fas fa-tag"></i> Next: Loading...
+                    </div>
+                </div>
+            </div>
+
+            <div class="entry-controls">
+                <button type="button" class="btn-add" onclick="addRow()">
+                    <i class="fas fa-plus"></i> Add New Row
+                </button>
+                <button type="button" class="btn-remove" onclick="removeLastRow()">
+                    <i class="fas fa-minus"></i> Remove Last Row
+                </button>
+                <button type="button" class="btn-save" onclick="saveRecords()">
+                    <i class="fas fa-save"></i> Save to Excel File
+                </button>
+                <button type="button" class="btn-clear" onclick="clearRows()">
+                    <i class="fas fa-eraser"></i> Clear Form
+                </button>
+            </div>
+            
+            <div class="form-container">
+                <div class="form-grid" id="formGrid">
+                    <!-- Dynamic form rows will be added here -->
+                </div>
+            </div>
+            
+            <div id="message" class="message"></div>
+        </div>
+    </div>
+    
+    <script>
+        let rowCount = 2;
+        let nextRefNumber = 1;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadNextReference();
+            initializeForms();
+            updateDate();
+        });
+
+        function formatAmountValue(value) {
+            const cleaned = String(value || '').replace(/,/g, '').replace(/[^0-9.]/g, '');
+            if (!cleaned) return '';
+            const parts = cleaned.split('.');
+            const whole = parts[0] ? Number(parts[0]).toLocaleString('en-US') : '0';
+            return parts.length > 1 ? whole + '.' + parts.slice(1).join('').slice(0, 2) : whole;
+        }
+
+        function cleanAmountValue(value) {
+            return String(value || '0').replace(/,/g, '') || '0';
+        }
+
+        function attachAmountFormatter(input) {
+            input.addEventListener('input', function() {
+                this.value = formatAmountValue(this.value);
+            });
+            input.value = formatAmountValue(input.value);
+        }
+
+        function updateDate() {
+            const now = new Date();
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            const dateElement = document.getElementById('currentDate');
+            if (dateElement) {
+                dateElement.textContent = now.toLocaleDateString('en-US', options);
+            }
+        }
+
+        function loadNextReference() {
+            fetch('/get_next_reference')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.next_reference && data.next_reference !== 'No Active Month') {
+                        document.getElementById('nextRefPreview').innerHTML = `<i class="fas fa-tag"></i> Next: ${data.next_reference}`;
+                    } else {
+                        document.getElementById('nextRefPreview').innerHTML = `<i class="fas fa-exclamation-triangle"></i> No Active Month`;
+                    }
+                })
+                .catch(error => console.error('Error loading reference:', error));
+        }
+
+        function initializeForms() {
+            const container = document.getElementById('formGrid');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            for (let i = 1; i <= rowCount; i++) {
+                addFormCard(i);
+            }
+        }
+
+        function addFormCard(rowNumber) {
+            const container = document.getElementById('formGrid');
+            const card = document.createElement('div');
+            card.className = 'form-card';
+            card.setAttribute('data-row', rowNumber);
+            const today = new Date().toISOString().split('T')[0];
+            
+            card.innerHTML = `
+                <div class="form-card-header">
+                    <div class="card-title">
+                        <span class="card-number">#${rowNumber}</span>
+                        <span class="card-badge">New Record</span>
+                    </div>
+                </div>
+                <div class="form-card-body">
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label><i class="fas fa-tag"></i> Reference Number</label>
+                            <div class="ref-placeholder">
+                                <i class="fas fa-clock"></i> Will be generated as UTA-XX when saved
+                            </div>
+                            <input type="hidden" class="ref-no" value="">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-calendar-alt"></i> Date <span class="required">*</span></label>
+                            <input type="date" class="date-input" value="${today}" required>
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-passport"></i> Pass Number</label>
+                            <input type="text" class="pass-input" placeholder="Enter pass number">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group full-width">
+                            <label><i class="fas fa-heading"></i> Subject <span class="required">*</span></label>
+                            <input type="text" class="subject-input" placeholder="Enter subject description" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-arrow-down" style="color: #4CAF50;"></i> In Payment</label>
+                            <input type="text" class="in-payment amount-input" placeholder="0" inputmode="decimal" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-arrow-up" style="color: #DC143C;"></i> Out Payment</label>
+                            <input type="text" class="out-payment amount-input" placeholder="0" inputmode="decimal" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-user-tie"></i> Sub Agent</label>
+                            <input type="text" class="sub-agent" placeholder="Enter sub agent name">
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(card);
+            card.querySelectorAll(".amount-input").forEach(attachAmountFormatter);
+        }
+
+        function addRow() {
+            rowCount++;
+            addFormCard(rowCount);
+            updateCardNumbers();
+            showMessage('✓ New record form added', 'success');
+            setTimeout(() => hideMessage(), 2000);
+            const newCard = document.querySelector(`.form-card[data-row="${rowCount}"]`);
+            if (newCard) {
+                newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        function removeLastRow() {
+            if (rowCount > 1) {
+                const container = document.getElementById('formGrid');
+                const lastCard = container.lastElementChild;
+                if (lastCard) {
+                    lastCard.remove();
+                    rowCount--;
+                    updateCardNumbers();
+                    showMessage('✓ Last record form removed', 'success');
+                    setTimeout(() => hideMessage(), 2000);
+                }
+            } else {
+                showMessage('❌ Cannot remove the last record form', 'error');
+                setTimeout(() => hideMessage(), 2000);
+            }
+        }
+
+        function updateCardNumbers() {
+            const cards = document.querySelectorAll('.form-card');
+            cards.forEach((card, index) => {
+                const cardNumber = card.querySelector('.card-number');
+                if (cardNumber) {
+                    cardNumber.textContent = `#${index + 1}`;
+                }
+                card.setAttribute('data-row', index + 1);
+            });
+        }
+
+        function clearRows() {
+            const container = document.getElementById('formGrid');
+            container.innerHTML = '';
+            rowCount = 2;
+            initializeForms();
+            showMessage('✓ Form cleared', 'success');
+            setTimeout(() => hideMessage(), 3000);
+        }
+
+        function saveRecords() {
+            const cards = document.querySelectorAll('.form-card');
+            const records = [];
+            let hasError = false;
+            
+            cards.forEach((card, index) => {
+                const date = card.querySelector('.date-input').value;
+                const subject = card.querySelector('.subject-input').value.trim();
+                
+                if (!date || !subject) {
+                    hasError = true;
+                    showMessage(`❌ Row ${index + 1}: Date and Subject are required!`, 'error');
+                    card.style.border = '2px solid #dc3545';
+                    setTimeout(() => {
+                        card.style.border = '';
+                    }, 3000);
+                    return;
+                }
+                
+                const record = {
+                    date: date,
+                    subject: subject,
+                    pass_no: card.querySelector('.pass-input').value.trim(),
+                    in_payment: cleanAmountValue(card.querySelector('.in-payment').value),
+                    out_payment: cleanAmountValue(card.querySelector('.out-payment').value),
+                    sub_agent: card.querySelector('.sub-agent').value.trim()
+                };
+                
+                records.push(record);
+            });
+            
+            if (hasError) {
+                return;
+            }
+            
+            if (records.length === 0) {
+                showMessage('❌ No records to save', 'error');
+                setTimeout(() => hideMessage(), 2000);
+                return;
+            }
+            
+            showMessage('<i class="fas fa-spinner fa-pulse"></i> Saving records to Excel file...', 'success');
+            
+            fetch('/save_records', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ records: records })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage('✅ ' + data.message, 'success');
+                    setTimeout(() => {
+                        clearRows();
+                        loadNextReference();
+                        hideMessage();
+                        setTimeout(() => {
+                            showMessage('📊 Ready for new entries!', 'success');
+                            setTimeout(() => hideMessage(), 3000);
+                        }, 1000);
+                    }, 2000);
+                } else {
+                    showMessage('❌ Error: ' + data.message, 'error');
+                    setTimeout(() => hideMessage(), 4000);
+                }
+            })
+            .catch(error => {
+                showMessage('❌ Connection Error: ' + error, 'error');
+                setTimeout(() => hideMessage(), 4000);
+            });
+        }
+
+        function showMessage(message, type) {
+            const messageDiv = document.getElementById('message');
+            if (!messageDiv) return;
+            messageDiv.innerHTML = message;
+            messageDiv.className = `message ${type}`;
+            messageDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                if (messageDiv.style.display === 'block') {
+                    hideMessage();
+                }
+            }, 4000);
+        }
+
+        function hideMessage() {
+            const messageDiv = document.getElementById('message');
+            if (messageDiv) {
+                messageDiv.style.display = 'none';
+            }
+        }
+    </script>
+
+    <script>
+        if (!sessionStorage.getItem('uta_logged_in')) {
+            window.location.replace('/logout');
+        }
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            if (sidebar) sidebar.classList.toggle('active');
+        }
+    </script>
+</body>
+</html>

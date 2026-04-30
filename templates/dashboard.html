@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UTA Manpower Service - Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="sidebar">
+            <div class="logo">
+                <div class="logo-icon">
+                    <img src="{{ url_for('static', filename='logo.png') }}" alt="UTA Logo" onerror="this.style.display='none'; this.parentElement.innerHTML='<i class=\'fas fa-briefcase\'></i>'">
+                </div>
+                <h2>UTA</h2>
+                <p>Manpower Service</p>
+                <div class="license-badge">SLBFE Licensed</div>
+            </div>
+            <nav class="nav-menu">
+                <a href="/dashboard" class="nav-item active">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="/enter" class="nav-item">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>Enter Records</span>
+                </a>
+                <a href="/view" class="nav-item">
+                    <i class="fas fa-table-list"></i>
+                    <span>View Records</span>
+                </a>
+                <a href="/backup" class="nav-item">
+                    <i class="fas fa-box-archive"></i>
+                    <span>Backup</span>
+                </a>
+            
+                <a href="/logout" class="nav-item logout-link" onclick="sessionStorage.removeItem('uta_logged_in')">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="year">2026</div>
+                <div class="version">v3.0</div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+            <div class="header">
+                <div class="header-title">
+                    <h1>Dashboard</h1>
+                    <p>Manage your monthly records efficiently</p>
+                </div>
+                <div class="header-actions">
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Month Management Section -->
+            <div class="month-management">
+                <div class="management-card">
+                    <div class="management-header">
+                        <i class="fas fa-calendar-plus"></i>
+                        <h3>Month Management</h3>
+                    </div>
+                    <div class="management-body">
+                        <div id="monthStatus">
+                            {% if active_month %}
+                                <div class="active-month-info">
+                                    <div class="month-badge active">
+                                        <i class="fas fa-check-circle"></i> Active Month
+                                    </div>
+                                    <div class="month-name">{{ months_data[active_month].display_name }}</div>
+                                    <div class="month-detail-grid">
+                                        <div class="detail-item">
+                                            <i class="fas fa-calendar"></i>
+                                            <span>Created</span>
+                                            <strong>{{ months_data[active_month].created_date.split()[0] }}</strong>
+                                        </div>
+                                        <div class="detail-item">
+                                            
+                                            <span>Opening Balance</span>
+                                            <strong>{{ months_data[active_month].opening_balance|amount }}</strong>
+                                        </div>
+                                    </div>
+                                    <button onclick="endMonth()" class="btn-end-month">
+                                        <i class="fas fa-lock"></i> End Month
+                                    </button>
+                                </div>
+                            {% else %}
+                                <div class="no-active-month">
+                                    <div class="empty-state-icon">
+                                        <i class="fas fa-folder-open"></i>
+                                    </div>
+                                    <h4>No Active Month</h4>
+                                    <p>Start by creating a new month to begin recording transactions</p>
+                                    <button onclick="showCreateModal()" class="btn-create-month">
+                                        <i class="fas fa-plus"></i> Create New Month
+                                    </button>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon-wrapper">
+                        <i class="fas fa-calendar-alt"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">Total Months</span>
+                        <span class="stat-number" id="totalMonths">0</span>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon-wrapper">
+                        <i class="fas fa-play-circle"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">Active Month</span>
+                        <span class="stat-number" id="activeMonth">None</span>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon-wrapper">
+                        <i class="fas fa-database"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">Total Records</span>
+                        <span class="stat-number" id="totalRecords">0</span>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon-wrapper">
+                        <i class="fas fa-hashtag"></i>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">Total References</span>
+                        <span class="stat-number" id="totalReferences">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Finance Stats -->
+            <div class="finance-stats">
+                <div class="finance-card">
+                    <div class="finance-icon in">
+                        <i class="fas fa-arrow-down"></i>
+                    </div>
+                    <div class="finance-info">
+                        <span class="finance-label">Total In Payment</span>
+                        <span class="finance-value" id="totalInPayment">0</span>
+                    </div>
+                </div>
+                <div class="finance-card">
+                    <div class="finance-icon out">
+                        <i class="fas fa-arrow-up"></i>
+                    </div>
+                    <div class="finance-info">
+                        <span class="finance-label">Total Out Payment</span>
+                        <span class="finance-value" id="totalOutPayment">0</span>
+                    </div>
+                </div>
+                <div class="finance-card">
+                    <div class="finance-icon net">
+                        <i class="fas fa-chart-pie"></i>
+                    </div>
+                    <div class="finance-info">
+                        <span class="finance-label">Net Balance</span>
+                        <span class="finance-value" id="netBalance">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Months List -->
+            <div class="months-section">
+                <div class="section-header">
+                    <div>
+                        <h2>All Months</h2>
+                        <p>View and manage all monthly records</p>
+                    </div>
+                </div>
+                <div class="months-grid" id="monthsGrid">
+                    {% for month_name, month_data in months_data.items() %}
+                        <div class="month-card {% if month_data.status == 'closed' %}closed{% endif %}">
+                            <div class="month-card-header">
+                                <i class="fas fa-calendar-alt"></i>
+                                <h3>{{ month_data.display_name }}</h3>
+                                {% if month_data.status == 'active' %}
+                                    <span class="month-status active">Active</span>
+                                {% else %}
+                                    <span class="month-status closed">Closed</span>
+                                {% endif %}
+                            </div>
+                            <div class="month-card-body">
+                                <div class="month-info">
+                                    <i class="fas fa-calendar-plus"></i>
+                                    <span>Created: {{ month_data.created_date[:10] }}</span>
+                                </div>
+                                <div class="month-info">
+                                    
+                                    <span>Opening: {{ month_data.opening_balance|amount }}</span>
+                                </div>
+                                <div class="month-stats" id="stats-{{ month_name }}">
+                                    <i class="fas fa-spinner fa-spin"></i> Loading...
+                                </div>
+                            </div>
+                            <div class="month-card-footer">
+                                <button onclick="viewMonth('{{ month_name }}')" class="btn-view">
+                                    <i class="fas fa-eye"></i> View Records
+                                </button>
+                                <button onclick="downloadMonth('{{ month_name }}')" class="btn-download">
+                                    <i class="fas fa-download"></i> Export
+                                </button>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Month Modal -->
+    <div id="createModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <i class="fas fa-calendar-plus"></i>
+                <h3>Create New Month</h3>
+            </div>
+            <p>Enter the opening balance for {{ current_month_display }}</p>
+            <div class="input-group">
+                <label>Opening Balance</label>
+                <input type="text" id="openingBalance" class="modal-input" placeholder="Enter opening balance" inputmode="decimal">
+            </div>
+            <div class="modal-buttons">
+                <button onclick="createMonth()" class="btn-confirm">
+                    <i class="fas fa-check"></i> Create Month
+                </button>
+                <button onclick="closeModal()" class="btn-cancel">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="message" class="message"></div>
+
+    <script>
+        function cleanAmountValue(value) {
+            return String(value || '0').replace(/,/g, '') || '0';
+        }
+
+        function formatAmountValue(value) {
+            const cleaned = String(value || '').replace(/,/g, '').replace(/[^0-9.]/g, '');
+            if (!cleaned) return '';
+            const parts = cleaned.split('.');
+            const whole = parts[0] ? Number(parts[0]).toLocaleString('en-US') : '0';
+            return parts.length > 1 ? whole + '.' + parts.slice(1).join('').slice(0, 2) : whole;
+        }
+
+        const openingBalanceInput = document.getElementById('openingBalance');
+        if (openingBalanceInput) {
+            openingBalanceInput.addEventListener('input', function() {
+                this.value = formatAmountValue(this.value);
+            });
+        }
+
+        function loadStats() {
+            fetch('/get_stats')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('totalMonths').textContent = data.total_months || 0;
+                    document.getElementById('activeMonth').textContent = data.active_month_display || 'None';
+                    document.getElementById('totalRecords').textContent = data.total_records || 0;
+                    document.getElementById('totalReferences').textContent = data.total_references || 0;
+                    document.getElementById('totalInPayment').innerHTML = (data.total_in_payment || 0).toLocaleString('en-US');
+                    document.getElementById('totalOutPayment').innerHTML = (data.total_out_payment || 0).toLocaleString('en-US');
+                    
+                    const netBalance = (data.total_in_payment || 0) - (data.total_out_payment || 0);
+                    document.getElementById('netBalance').innerHTML = netBalance.toLocaleString('en-US');
+                })
+                .catch(error => console.error('Error loading stats:', error));
+        }
+        
+        function loadMonthStats() {
+            const monthCards = document.querySelectorAll('.month-card');
+            monthCards.forEach(card => {
+                const viewBtn = card.querySelector('.btn-view');
+                if (viewBtn) {
+                    const onclickAttr = viewBtn.getAttribute('onclick');
+                    if (onclickAttr) {
+                        const match = onclickAttr.match(/viewMonth\('([^']+)'\)/);
+                        if (match) {
+                            const monthName = match[1];
+                            fetch(`/get_month_stats/${monthName}`)
+                                .then(response => response.json())
+                                .then(data => {
+                                    const statsDiv = document.getElementById(`stats-${monthName}`);
+                                    if (statsDiv && !data.error) {
+                                        statsDiv.innerHTML = `
+                                            <div class="stat-row">
+                                                <i class="fas fa-list"></i>
+                                                <span>Records: ${data.total_records || 0}</span>
+                                            </div>
+                                            <div class="stat-row">
+                                                <i class="fas fa-chart-line"></i>
+                                                <span>Closing: ${(data.closing_balance || 0).toLocaleString('en-US')}</span>
+                                            </div>
+                                        `;
+                                    } else if (statsDiv) {
+                                        statsDiv.innerHTML = '<div class="stat-row">No data available</div>';
+                                    }
+                                })
+                                .catch(error => console.error('Error loading month stats:', error));
+                        }
+                    }
+                }
+            });
+        }
+        
+        function showCreateModal() {
+            document.getElementById('createModal').style.display = 'block';
+        }
+        
+        function createMonth() {
+            const openingBalance = cleanAmountValue(document.getElementById('openingBalance').value);
+            
+            if (!openingBalance && openingBalance !== 0) {
+                showMessage('Please enter opening balance', 'error');
+                return;
+            }
+            
+            fetch('/create_month', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ opening_balance: parseFloat(openingBalance) })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(data.message, 'success');
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1500);
+                } else {
+                    showMessage('Error: ' + data.message, 'error');
+                }
+                closeModal();
+            })
+            .catch(error => {
+                showMessage('Error creating month', 'error');
+                closeModal();
+            });
+        }
+        
+        function endMonth() {
+            fetch('/end_month', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(data.message, 'success');
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1500);
+                } else {
+                    showMessage('Error: ' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showMessage('Error ending month', 'error');
+            });
+        }
+        
+        function viewMonth(monthName) {
+            window.location.href = `/view_month/${monthName}`;
+        }
+        
+        function downloadMonth(monthName) {
+            window.location.href = `/download_excel/${monthName}`;
+        }
+        
+        function closeModal() {
+            document.getElementById('createModal').style.display = 'none';
+            document.getElementById('openingBalance').value = '';
+        }
+        
+        function showMessage(message, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.innerHTML = message;
+            messageDiv.className = `message ${type}`;
+            messageDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 3000);
+        }
+        
+        function updateDate() {
+            const now = new Date();
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            document.getElementById('currentDate').textContent = now.toLocaleDateString('en-US', options);
+        }
+        
+        updateDate();
+        loadStats();
+        setTimeout(loadMonthStats, 500);
+        setInterval(loadStats, 30000);
+        
+        window.onclick = function(event) {
+            const modal = document.getElementById('createModal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
+    </script>
+
+    <script>
+        if (!sessionStorage.getItem('uta_logged_in')) {
+            window.location.replace('/logout');
+        }
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            if (sidebar) sidebar.classList.toggle('active');
+        }
+    </script>
+</body>
+</html>
