@@ -12,13 +12,16 @@
     <div class="dashboard-container">
         <div class="sidebar">
             <div class="logo">
-                <div class="logo-icon">
-                    <img src="{{ url_for('static', filename='logo.png') }}" alt="UTA Logo" onerror="this.style.display='none'; this.parentElement.innerHTML='<i class=\'fas fa-briefcase\'></i>'">
-                </div>
-                <h2>UTA</h2>
-                <p>Manpower Service</p>
-                <div class="license-badge">SLBFE Licensed</div>
-            </div>
+    <div class="logo-icon">
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="UTA Logo" class="logo-img">
+        <div class="logo-fallback">
+            <i class="fas fa-briefcase"></i>
+        </div>
+    </div>
+    <h2>UTA</h2>
+    <p>Manpower Service</p>
+    <div class="license-badge">SLBFE Licensed</div>
+</div>
             <nav class="nav-menu">
                 <a href="/dashboard" class="nav-item active">
                     <i class="fas fa-chart-line"></i>
