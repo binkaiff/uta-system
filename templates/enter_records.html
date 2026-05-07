@@ -67,12 +67,6 @@
             </div>
 
             <div class="entry-controls">
-                <button type="button" class="btn-add" onclick="addRow()">
-                    <i class="fas fa-plus"></i> Add New Row
-                </button>
-                <button type="button" class="btn-remove" onclick="removeLastRow()">
-                    <i class="fas fa-minus"></i> Remove Last Row
-                </button>
                 <button type="button" class="btn-save" onclick="saveRecords()">
                     <i class="fas fa-save"></i> Save to Excel File
                 </button>
@@ -85,6 +79,11 @@
                 <div class="form-grid" id="formGrid">
                     <!-- Dynamic form rows will be added here -->
                 </div>
+                <div class="add-row-footer">
+                    <button type="button" class="btn-add-inline" onclick="addRow()">
+                        <i class="fas fa-plus-circle"></i> Add Another Record
+                    </button>
+                </div>
             </div>
             
             <div id="message" class="message"></div>
@@ -92,7 +91,7 @@
     </div>
     
     <script>
-        let rowCount = 2;
+        let rowCount = 1;
         let nextRefNumber = 1;
 
         document.addEventListener('DOMContentLoaded', function() {
@@ -146,10 +145,8 @@
             const container = document.getElementById('formGrid');
             if (!container) return;
             container.innerHTML = '';
-            
-            for (let i = 1; i <= rowCount; i++) {
-                addFormCard(i);
-            }
+            rowCount = 1;
+            addFormCard(1);
         }
 
         function addFormCard(rowNumber) {
@@ -165,6 +162,9 @@
                         <span class="card-number">#${rowNumber}</span>
                         <span class="card-badge">New Record</span>
                     </div>
+                    <button type="button" class="btn-remove-card" onclick="removeThisCard(this)" title="Remove this record">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
                 <div class="form-card-body">
                     <div class="form-row">
@@ -220,29 +220,28 @@
             rowCount++;
             addFormCard(rowCount);
             updateCardNumbers();
-            showMessage('✓ New record form added', 'success');
-            setTimeout(() => hideMessage(), 2000);
             const newCard = document.querySelector(`.form-card[data-row="${rowCount}"]`);
             if (newCard) {
-                newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                newCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                // Focus the date input of the new card
+                setTimeout(() => {
+                    const dateInput = newCard.querySelector('.date-input');
+                    if (dateInput) dateInput.focus();
+                }, 400);
             }
         }
 
-        function removeLastRow() {
-            if (rowCount > 1) {
-                const container = document.getElementById('formGrid');
-                const lastCard = container.lastElementChild;
-                if (lastCard) {
-                    lastCard.remove();
-                    rowCount--;
-                    updateCardNumbers();
-                    showMessage('✓ Last record form removed', 'success');
-                    setTimeout(() => hideMessage(), 2000);
-                }
-            } else {
-                showMessage('❌ Cannot remove the last record form', 'error');
+        function removeThisCard(btn) {
+            const cards = document.querySelectorAll('.form-card');
+            if (cards.length <= 1) {
+                showMessage('❌ Cannot remove the only record form', 'error');
                 setTimeout(() => hideMessage(), 2000);
+                return;
             }
+            const card = btn.closest('.form-card');
+            card.remove();
+            rowCount = document.querySelectorAll('.form-card').length;
+            updateCardNumbers();
         }
 
         function updateCardNumbers() {
@@ -254,12 +253,10 @@
                 }
                 card.setAttribute('data-row', index + 1);
             });
+            rowCount = cards.length;
         }
 
         function clearRows() {
-            const container = document.getElementById('formGrid');
-            container.innerHTML = '';
-            rowCount = 2;
             initializeForms();
             showMessage('✓ Form cleared', 'success');
             setTimeout(() => hideMessage(), 3000);

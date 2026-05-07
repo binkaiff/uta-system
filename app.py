@@ -496,25 +496,26 @@ def delete_record_from_month():
         if row_to_delete:
             create_backup('delete_record', month_name)
             ws.delete_rows(row_to_delete)
-            
-            # Renumber remaining records
+
+            # Renumber remaining transaction records (row 3 onward)
             new_no = 2
             for row in range(3, ws.max_row + 1):
-                if ws.cell(row, 1).value and ws.cell(row, 1).value != 'OPENING':
-                    ws.cell(row, 1).value = new_no
-                    new_no += 1
-            
-            # Recalculate balances
+                ws.cell(row, 1).value = new_no
+                new_no += 1
+
+            # Recalculate balances — opening balance is in row 2, identified by col B == 'OPENING'
             balance = 0
             for row in range(2, ws.max_row + 1):
-                if ws.cell(row, 1).value == 'OPENING':
-                    balance = ws.cell(row, 9).value
+                if ws.cell(row, 2).value == 'OPENING':
+                    # Opening row: balance is already stored, just read it
+                    balance = float(ws.cell(row, 9).value or 0)
                 else:
-                    in_payment = ws.cell(row, 6).value or 0
-                    out_payment = ws.cell(row, 7).value or 0
+                    in_payment = float(ws.cell(row, 6).value or 0)
+                    out_payment = float(ws.cell(row, 7).value or 0)
                     balance = balance + in_payment - out_payment
                     ws.cell(row, 9).value = balance
-            
+                    ws.cell(row, 9).number_format = '#,##0'
+
             wb.save(filename)
             wb.close()
             return jsonify({'success': True, 'message': f'Record {record_no} deleted successfully!'})
@@ -560,6 +561,74 @@ def get_month_records(month_name):
         print(f"Error getting records: {e}")
         return jsonify({'records': [], 'error': str(e)})
 
+def recalculate_and_sort_sheet(ws):
+    """Sort all transaction rows by date (opening row stays first), renumber, and recalculate balances."""
+    # Collect opening row (row 2, col B == 'OPENING')
+    opening_row_data = None
+    transaction_rows = []
+
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        row = list(row)
+        if row[1] == 'OPENING':
+            opening_row_data = row
+        elif row[0] is not None:
+            transaction_rows.append(row)
+
+    if opening_row_data is None:
+        return
+
+    def parse_date_safe(row):
+        try:
+            date_val = row[2]
+            if isinstance(date_val, str):
+                return datetime.strptime(date_val, '%Y-%m-%d')
+            elif hasattr(date_val, 'year'):
+                return datetime(date_val.year, date_val.month, date_val.day)
+        except Exception:
+            pass
+        return datetime(9999, 12, 31)
+
+    transaction_rows.sort(key=parse_date_safe)
+
+    # Clear rows from row 2 onward, then re-write
+    ws.delete_rows(2, ws.max_row)
+
+    # Write opening row back
+    ws.append(opening_row_data)
+    opening_row_idx = ws.max_row
+    opening_fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
+    opening_font = Font(bold=True, color="2E7D32")
+    for col in range(1, 10):
+        cell = ws.cell(opening_row_idx, col)
+        cell.fill = opening_fill
+        cell.font = opening_font
+    for col in [6, 7, 9]:
+        ws.cell(opening_row_idx, col).number_format = '#,##0'
+
+    # Write sorted transactions with recalculated balances
+    balance = float(opening_row_data[8]) if opening_row_data[8] is not None else 0
+    for i, row in enumerate(transaction_rows):
+        in_payment = float(row[5]) if row[5] else 0
+        out_payment = float(row[6]) if row[6] else 0
+        balance = balance + in_payment - out_payment
+
+        new_row = [
+            i + 2,
+            row[1],   # Ref No
+            row[2],   # Date
+            row[3],   # Subject
+            row[4],   # Pass No
+            in_payment,
+            out_payment,
+            row[7],   # Sub Agent
+            balance
+        ]
+        ws.append(new_row)
+        row_idx = ws.max_row
+        for col in [6, 7, 9]:
+            ws.cell(row_idx, col).number_format = '#,##0'
+
+
 @app.route('/save_records', methods=['POST'])
 @login_required
 def save_records():
@@ -582,24 +651,23 @@ def save_records():
         wb = load_workbook(filename)
         ws = wb.active
         
-        next_no = get_next_row_number(active_month)
         next_ref_num = get_next_reference_number(active_month)
         current_balance = get_current_balance(active_month)
         
         saved_count = 0
-        for i, record in enumerate(records):
+        ref_offset = 0
+        for record in records:
             if not record.get('date') or not record.get('subject'):
                 continue
             
-            ref_no = f"UTA-{str(next_ref_num + i).zfill(2)}"
-            
-            # Calculate balance
+            ref_no = f"UTA-{str(next_ref_num + ref_offset).zfill(2)}"
             in_payment = parse_amount(record.get('in_payment', 0))
             out_payment = parse_amount(record.get('out_payment', 0))
             new_balance = current_balance + in_payment - out_payment
-            
+
+            # Row number is a placeholder; recalculate_and_sort_sheet will fix it
             row = [
-                next_no + i,
+                0,
                 ref_no,
                 record.get('date', ''),
                 record.get('subject', ''),
@@ -610,12 +678,13 @@ def save_records():
                 new_balance
             ]
             ws.append(row)
-            current_row = ws.max_row
-            for col in [6, 7, 9]:
-                ws.cell(current_row, col).number_format = '#,##0'
             current_balance = new_balance
             saved_count += 1
-        
+            ref_offset += 1
+
+        # Sort all rows by date and recalculate balances in one pass
+        recalculate_and_sort_sheet(ws)
+
         wb.save(filename)
         wb.close()
         
@@ -628,7 +697,6 @@ def save_records():
     except Exception as e:
         print(f"Error saving records: {e}")
         return jsonify({'success': False, 'message': f'Error saving: {str(e)}'})
-
 @app.route('/get_next_reference')
 @login_required
 def get_next_reference():

@@ -954,6 +954,54 @@ body {
     color: white;
 }
 
+/* Per-card remove (X) button in card header */
+.btn-remove-card {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: white;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.2s, transform 0.2s;
+    flex-shrink: 0;
+}
+.btn-remove-card:hover {
+    background: rgba(220, 20, 60, 0.7);
+    transform: scale(1.1);
+}
+
+/* "Add Another Record" button below the last card */
+.add-row-footer {
+    display: flex;
+    justify-content: center;
+    padding: 20px 0 10px;
+}
+
+.btn-add-inline {
+    background: linear-gradient(135deg, #28a745, #218838);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 14px 36px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 4px 15px rgba(40,167,69,0.35);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.btn-add-inline:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(40,167,69,0.5);
+}
+
 .btn-save {
     background: linear-gradient(135deg, #DC143C, #8B0000);
     color: white;
