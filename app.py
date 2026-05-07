@@ -474,9 +474,9 @@ def delete_record_from_month():
     try:
         data = request.json
         month_name = data.get('month_name')
-        record_no = data.get('record_no')
-        
-        if not month_name or not record_no:
+        ref_no = data.get('ref_no') or str(data.get('record_no', ''))
+
+        if not month_name or not ref_no:
             return jsonify({'success': False, 'message': 'Missing required data'})
         
         filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
@@ -485,9 +485,6 @@ def delete_record_from_month():
         
         wb = load_workbook(filename)
         ws = wb.active
-        
-        # Find and delete the row by Ref No (UTA-XX) — never by row number
-        ref_no = data.get('ref_no') or str(data.get('record_no', ''))
         row_to_delete = None
         for row in range(3, ws.max_row + 1):
             if str(ws.cell(row, 2).value or '').strip() == str(ref_no).strip():
