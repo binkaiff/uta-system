@@ -280,7 +280,7 @@
         
         function showDeleteRecordModal(refNo, rowNo) {
             pendingRecordDelete = refNo;
-            document.getElementById('deleteRecordMessage').innerHTML = `Are you sure you want to delete record <strong>${refNo}</strong>? This action cannot be undone.`;
+            document.getElementById('deleteRecordMessage').innerHTML = `Are you sure you want to delete <strong>${refNo}</strong>? All reference numbers will be re-indexed automatically.`;
             document.getElementById('deleteRecordModal').style.display = 'flex';
         }
         

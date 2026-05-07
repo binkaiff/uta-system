@@ -498,11 +498,14 @@ def delete_record_from_month():
             create_backup('delete_record', month_name)
             ws.delete_rows(row_to_delete)
 
-            # Renumber the No column (col A) sequentially — ref numbers in col B are NOT touched
+            # Re-index both No (col A) and Ref No (col B) sequentially from 1
             new_no = 2
+            new_ref = 1
             for row in range(3, ws.max_row + 1):
                 ws.cell(row, 1).value = new_no
+                ws.cell(row, 2).value = f"UTA-{str(new_ref).zfill(2)}"
                 new_no += 1
+                new_ref += 1
 
             # Recalculate balances — opening balance is in row 2, identified by col B == 'OPENING'
             balance = 0
@@ -518,7 +521,7 @@ def delete_record_from_month():
 
             wb.save(filename)
             wb.close()
-            return jsonify({'success': True, 'message': f'Record {ref_no} deleted successfully!'})
+            return jsonify({'success': True, 'message': f'Record deleted and references re-indexed successfully!'})
         else:
             wb.close()
             return jsonify({'success': False, 'message': 'Record not found'})
