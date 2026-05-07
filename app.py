@@ -486,10 +486,11 @@ def delete_record_from_month():
         wb = load_workbook(filename)
         ws = wb.active
         
-        # Find and delete the row
+        # Find and delete the row by Ref No (UTA-XX) — never by row number
+        ref_no = data.get('ref_no') or str(data.get('record_no', ''))
         row_to_delete = None
         for row in range(3, ws.max_row + 1):
-            if ws.cell(row, 1).value == record_no:
+            if str(ws.cell(row, 2).value or '').strip() == str(ref_no).strip():
                 row_to_delete = row
                 break
         
@@ -497,7 +498,7 @@ def delete_record_from_month():
             create_backup('delete_record', month_name)
             ws.delete_rows(row_to_delete)
 
-            # Renumber remaining transaction records (row 3 onward)
+            # Renumber the No column (col A) sequentially — ref numbers in col B are NOT touched
             new_no = 2
             for row in range(3, ws.max_row + 1):
                 ws.cell(row, 1).value = new_no
@@ -507,7 +508,6 @@ def delete_record_from_month():
             balance = 0
             for row in range(2, ws.max_row + 1):
                 if ws.cell(row, 2).value == 'OPENING':
-                    # Opening row: balance is already stored, just read it
                     balance = float(ws.cell(row, 9).value or 0)
                 else:
                     in_payment = float(ws.cell(row, 6).value or 0)
@@ -518,7 +518,7 @@ def delete_record_from_month():
 
             wb.save(filename)
             wb.close()
-            return jsonify({'success': True, 'message': f'Record {record_no} deleted successfully!'})
+            return jsonify({'success': True, 'message': f'Record {ref_no} deleted successfully!'})
         else:
             wb.close()
             return jsonify({'success': False, 'message': 'Record not found'})

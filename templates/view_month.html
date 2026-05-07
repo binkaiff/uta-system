@@ -261,7 +261,7 @@
             tbody.innerHTML = records.map(record => `
                 <tr class="record-row">
                     <td class="action-cell">
-                        <button onclick="showDeleteRecordModal(${record.no})" class="delete-icon-btn" title="Delete Record">
+                        <button onclick="showDeleteRecordModal('${record.ref_no}', ${record.no})" class="delete-icon-btn" title="Delete Record">
                             <i class="fas fa-trash-alt"></i>
                         </button>
                     </td>
@@ -278,9 +278,9 @@
             `).join('');
         }
         
-        function showDeleteRecordModal(recordNo) {
-            pendingRecordDelete = recordNo;
-            document.getElementById('deleteRecordMessage').innerHTML = `Are you sure you want to delete record <strong>#${recordNo}</strong>? This action cannot be undone.`;
+        function showDeleteRecordModal(refNo, rowNo) {
+            pendingRecordDelete = refNo;
+            document.getElementById('deleteRecordMessage').innerHTML = `Are you sure you want to delete record <strong>${refNo}</strong>? This action cannot be undone.`;
             document.getElementById('deleteRecordModal').style.display = 'flex';
         }
         
@@ -293,7 +293,7 @@
                     },
                     body: JSON.stringify({ 
                         month_name: monthName,
-                        record_no: pendingRecordDelete 
+                        ref_no: pendingRecordDelete 
                     })
                 })
                 .then(response => response.json())
