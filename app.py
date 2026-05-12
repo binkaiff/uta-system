@@ -495,26 +495,8 @@ def delete_record_from_month():
             create_backup('delete_record', month_name)
             ws.delete_rows(row_to_delete)
 
-            # Re-index both No (col A) and Ref No (col B) sequentially from 1
-            new_no = 2
-            new_ref = 1
-            for row in range(3, ws.max_row + 1):
-                ws.cell(row, 1).value = new_no
-                ws.cell(row, 2).value = f"UTA-{str(new_ref).zfill(2)}"
-                new_no += 1
-                new_ref += 1
-
-            # Recalculate balances — opening balance is in row 2, identified by col B == 'OPENING'
-            balance = 0
-            for row in range(2, ws.max_row + 1):
-                if ws.cell(row, 2).value == 'OPENING':
-                    balance = float(ws.cell(row, 9).value or 0)
-                else:
-                    in_payment = float(ws.cell(row, 6).value or 0)
-                    out_payment = float(ws.cell(row, 7).value or 0)
-                    balance = balance + in_payment - out_payment
-                    ws.cell(row, 9).value = balance
-                    ws.cell(row, 9).number_format = '#,##0'
+            # Re-sort by date, reassign Ref Nos sequentially, and recalculate balances
+            recalculate_and_sort_sheet(ws)
 
             wb.save(filename)
             wb.close()
@@ -605,22 +587,25 @@ def recalculate_and_sort_sheet(ws):
     for col in [6, 7, 9]:
         ws.cell(opening_row_idx, col).number_format = '#,##0'
 
-    # Write sorted transactions with recalculated balances
+    # Write sorted transactions with recalculated balances and reassigned ref numbers
     balance = float(opening_row_data[8]) if opening_row_data[8] is not None else 0
     for i, row in enumerate(transaction_rows):
         in_payment = float(row[5]) if row[5] else 0
         out_payment = float(row[6]) if row[6] else 0
         balance = balance + in_payment - out_payment
 
+        # Reassign ref number based on sorted position (1-based)
+        new_ref_no = f"UTA-{str(i + 1).zfill(2)}"
+
         new_row = [
-            i + 2,
-            row[1],   # Ref No
-            row[2],   # Date
-            row[3],   # Subject
-            row[4],   # Pass No
+            i + 2,         # Row No (#)
+            new_ref_no,    # Ref No — reassigned sequentially after date sort
+            row[2],        # Date
+            row[3],        # Subject
+            row[4],        # Pass No
             in_payment,
             out_payment,
-            row[7],   # Sub Agent
+            row[7],        # Sub Agent
             balance
         ]
         ws.append(new_row)
