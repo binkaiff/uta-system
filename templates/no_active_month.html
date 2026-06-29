@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UTA Manpower Service - No Active Month</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="sidebar">
+            <div class="logo">
+                <div class="logo-icon">
+                    <img src="{{ url_for('static', filename='logo.png') }}" alt="UTA Logo" onerror="this.style.display='none'; this.parentElement.innerHTML='<i class=\'fas fa-briefcase\'></i>'">
+                </div>
+                <h2>UTA</h2>
+                <p>Manpower Service</p>
+                <div class="license-badge">SLBFE Licensed</div>
+            </div>
+            <nav class="nav-menu">
+                <a href="/dashboard" class="nav-item">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="/enter" class="nav-item active">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>Enter Records</span>
+                </a>
+                <a href="/view" class="nav-item">
+                    <i class="fas fa-table-list"></i>
+                    <span>View Records</span>
+                </a>
+                <a href="/backup" class="nav-item">
+                    <i class="fas fa-box-archive"></i>
+                    <span>Backup</span>
+                </a>
+            
+                <a href="/logout" class="nav-item logout-link" onclick="sessionStorage.removeItem('uta_logged_in')">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="year">2026</div>
+                <div class="version">v3.0</div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+            <div class="header">
+                <div class="header-title">
+                    <h1>No Active Month</h1>
+                    <p>Please create a new month to start entering records</p>
+                </div>
+                <div class="header-actions">
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="empty-state-container">
+                <div class="empty-state-card">
+                    <div class="empty-state-icon">
+                        <i class="fas fa-calendar-times"></i>
+                    </div>
+                    <h2>No Active Month Found</h2>
+                    <p>You need to create a new month before you can start entering records. Each month is tracked separately with its own opening balance and transactions.</p>
+                    <button onclick="goToDashboard()" class="btn-create-month">
+                        <i class="fas fa-plus"></i> Create New Month
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function updateDate() {
+            const now = new Date();
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            document.getElementById('currentDate').textContent = now.toLocaleDateString('en-US', options);
+        }
+        
+        function goToDashboard() {
+            window.location.href = '/';
+        }
+        
+        updateDate();
+    </script>
+
+    <script>
+        if (!sessionStorage.getItem('uta_logged_in')) {
+            window.location.replace('/logout');
+        }
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            if (sidebar) sidebar.classList.toggle('active');
+        }
+    </script>
+</body>
+</html>

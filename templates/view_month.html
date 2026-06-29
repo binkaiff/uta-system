@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UTA Manpower Service - {{ month_data.display_name }} Records</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="sidebar">
+            <div class="logo">
+                <div class="logo-icon">
+                    <img src="{{ url_for('static', filename='logo.png') }}" alt="UTA Logo" onerror="this.style.display='none'; this.parentElement.innerHTML='<i class=\'fas fa-briefcase\'></i>'">
+                </div>
+                <h2>UTA</h2>
+                <p>Manpower Service</p>
+                <div class="license-badge">SLBFE Licensed</div>
+            </div>
+            <nav class="nav-menu">
+                <a href="/dashboard" class="nav-item">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="/enter" class="nav-item">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>Enter Records</span>
+                </a>
+                <a href="/view" class="nav-item active">
+                    <i class="fas fa-table-list"></i>
+                    <span>View Records</span>
+                </a>
+                <a href="/backup" class="nav-item">
+                    <i class="fas fa-box-archive"></i>
+                    <span>Backup</span>
+                </a>
+            
+                <a href="/logout" class="nav-item logout-link" onclick="sessionStorage.removeItem('uta_logged_in')">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="year">2026</div>
+                <div class="version">v3.0</div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+            <div class="header">
+                <div class="header-title">
+                    <h1>{{ month_data.display_name }} Records</h1>
+                    <p>View and manage records for this month</p>
+                </div>
+                <div class="header-actions">
+                    <div class="date-display">
+                        <i class="far fa-calendar-alt"></i>
+                        <span id="currentDate"></span>
+                    </div>
+                    <button onclick="downloadMonth()" class="btn-excel">
+                        <i class="fas fa-file-excel"></i> Export to Excel
+                    </button>
+                    <button onclick="goBack()" class="btn-back">
+                        <i class="fas fa-arrow-left"></i> Back
+                    </button>
+                </div>
+            </div>
+
+            <!-- Month Stats Cards -->
+            <div class="month-stats-grid">
+                <div class="stat-card-primary">
+                    <div class="stat-icon-bg">
+                        <i class="fas fa-folder-open"></i>
+                    </div>
+                    <div class="stat-details">
+                        <span class="stat-label">Total Records</span>
+                        <span class="stat-number-large" id="totalRecords">0</span>
+                    </div>
+                </div>
+
+                <div class="stat-card-success">
+                    <div class="stat-icon-bg">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="stat-details">
+                        <span class="stat-label">Opening Balance</span>
+                        <span class="stat-number-large" id="openingBalance">0</span>
+                    </div>
+                </div>
+
+                <div class="stat-card-warning">
+                    <div class="stat-icon-bg">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="stat-details">
+                        <span class="stat-label">Closing Balance</span>
+                        <span class="stat-number-large" id="closingBalance">0</span>
+                    </div>
+                </div>
+
+                <div class="stat-card-info">
+                    <div class="stat-icon-bg">
+                        <i class="fas fa-exchange-alt"></i>
+                    </div>
+                    <div class="stat-details">
+                        <span class="stat-label">Net Change</span>
+                        <span class="stat-number-large" id="netChange">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filter Section -->
+            <div class="filter-bar">
+                <div class="filter-title">
+                    <i class="fas fa-filter"></i>
+                    <span>Filter Records</span>
+                </div>
+                <div class="filter-controls">
+                    <div class="filter-input-group">
+                        <label><i class="fas fa-calendar"></i> Date</label>
+                        <input type="date" id="filterDate" class="filter-field" placeholder="Select date">
+                    </div>
+                    <div class="filter-input-group">
+                        <label><i class="fas fa-hashtag"></i> Reference No</label>
+                        <input type="text" id="searchRef" class="filter-field" placeholder="UTA-01">
+                    </div>
+                    <div class="filter-input-group">
+                        <label><i class="fas fa-heading"></i> Subject</label>
+                        <input type="text" id="searchSubject" class="filter-field" placeholder="Enter subject">
+                    </div>
+                    <div class="filter-actions">
+                        <button onclick="applyFilters()" class="btn-apply-filter">
+                            <i class="fas fa-search"></i> Apply
+                        </button>
+                        <button onclick="resetFilters()" class="btn-reset-filter">
+                            <i class="fas fa-undo-alt"></i> Reset
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Records Table -->
+            <div class="records-table-container">
+                <div class="table-header">
+                    <h3><i class="fas fa-list"></i> Transaction Records</h3>
+                    <div class="table-info">
+                        <span id="recordCount">0</span> records found
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table class="records-table">
+                        <thead>
+                            <tr>
+                                <th width="60">Action</th>
+                                <th width="60">#</th>
+                                <th width="120">Ref No</th>
+                                <th width="110">Date</th>
+                                <th>Subject</th>
+                                <th width="110">Pass No</th>
+                                <th width="130">In Payment</th>
+                                <th width="130">Out Payment</th>
+                                <th width="150">Sub Agent</th>
+                                <th width="130">Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody id="viewTableBody">
+                            <tr>
+                                <td colspan="10" class="loading-cell">
+                                    <i class="fas fa-spinner fa-pulse"></i> Loading records...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Record Confirmation Modal -->
+    <div id="deleteRecordModal" class="modal">
+        <div class="modal-content small-modal">
+            <div class="modal-icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <h3>Delete Record</h3>
+            <p id="deleteRecordMessage">Are you sure you want to delete this record? This action cannot be undone.</p>
+            <div class="modal-buttons">
+                <button onclick="confirmDeleteRecord()" class="btn-danger">
+                    <i class="fas fa-trash-alt"></i> Delete
+                </button>
+                <button onclick="closeDeleteRecordModal()" class="btn-secondary">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="message" class="message"></div>
+
+    <script>
+        let allRecords = [];
+        let pendingRecordDelete = null;
+        const monthName = '{{ month_name }}';
+
+        function updateDate() {
+            const now = new Date();
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            const dateElement = document.getElementById('currentDate');
+            if (dateElement) {
+                dateElement.textContent = now.toLocaleDateString('en-US', options);
+            }
+        }
+
+        function loadMonthStats() {
+            fetch(`/get_month_stats/${monthName}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.error) {
+                        document.getElementById('totalRecords').textContent = data.total_records || 0;
+                        document.getElementById('openingBalance').innerHTML = (data.opening_balance || 0).toLocaleString('en-US');
+                        document.getElementById('closingBalance').innerHTML = (data.closing_balance || 0).toLocaleString('en-US');
+                        
+                        const netChange = (data.closing_balance || 0) - (data.opening_balance || 0);
+                        const netChangeColor = netChange >= 0 ? '#4CAF50' : '#DC143C';
+                        const netChangeIcon = netChange >= 0 ? '↑' : '↓';
+                        document.getElementById('netChange').innerHTML = `${netChangeIcon} ${Math.abs(netChange).toLocaleString('en-US')}`;
+                        document.getElementById('netChange').style.color = netChangeColor;
+                    }
+                })
+                .catch(error => console.error('Error loading month stats:', error));
+        }
+
+        function loadRecords() {
+            fetch(`/get_month_records/${monthName}`)
+                .then(response => response.json())
+                .then(data => {
+                    allRecords = data.records || [];
+                    displayRecords(allRecords);
+                })
+                .catch(error => {
+                    console.error('Error loading records:', error);
+                    document.getElementById('viewTableBody').innerHTML = '<tr><td colspan="10" class="error-cell"><i class="fas fa-exclamation-circle"></i> Error loading records</td></tr>';
+                });
+        }
+        
+        function displayRecords(records) {
+            const tbody = document.getElementById('viewTableBody');
+            const recordCountSpan = document.getElementById('recordCount');
+            
+            if (records.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" class="empty-cell"><i class="fas fa-inbox"></i> No records found</td></tr>';
+                recordCountSpan.textContent = '0';
+                return;
+            }
+            
+            recordCountSpan.textContent = records.length;
+            
+            tbody.innerHTML = records.map(record => `
+                <tr class="record-row">
+                    <td class="action-cell">
+                        <button onclick="showDeleteRecordModal('${record.ref_no}', ${record.no})" class="delete-icon-btn" title="Delete Record">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                    <td class="number-cell">${record.no}</td>
+                    <td class="ref-cell"><span class="ref-badge">${escapeHtml(record.ref_no || '')}</span></td>
+                    <td class="date-cell">${record.date || ''}</td>
+                    <td class="subject-cell">${escapeHtml(record.subject || '')}</td>
+                    <td class="pass-cell">${escapeHtml(record.pass_no || '') || '-'}</td>
+                    <td class="payment-in-cell"><i class="fas fa-arrow-down"></i> ${formatCurrency(record.in_payment)}</td>
+                    <td class="payment-out-cell"><i class="fas fa-arrow-up"></i> ${formatCurrency(record.out_payment)}</td>
+                    <td class="agent-cell">${escapeHtml(record.sub_agent || '') || '-'}</td>
+                    <td class="balance-cell">${formatCurrency(record.balance)}</td>
+                </tr>
+            `).join('');
+        }
+        
+        function showDeleteRecordModal(refNo, rowNo) {
+            pendingRecordDelete = refNo;
+            document.getElementById('deleteRecordMessage').innerHTML = `Are you sure you want to delete <strong>${refNo}</strong>? All reference numbers will be re-indexed automatically.`;
+            document.getElementById('deleteRecordModal').style.display = 'flex';
+        }
+        
+        function confirmDeleteRecord() {
+            if (pendingRecordDelete) {
+                fetch('/delete_record_from_month', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        month_name: monthName,
+                        ref_no: pendingRecordDelete 
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showMessage(data.message, 'success');
+                        loadRecords();
+                        loadMonthStats();
+                    } else {
+                        showMessage('Error: ' + data.message, 'error');
+                    }
+                    closeDeleteRecordModal();
+                    pendingRecordDelete = null;
+                })
+                .catch(error => {
+                    showMessage('Error deleting record', 'error');
+                    closeDeleteRecordModal();
+                });
+            }
+        }
+        
+        function closeDeleteRecordModal() {
+            document.getElementById('deleteRecordModal').style.display = 'none';
+            pendingRecordDelete = null;
+        }
+        
+        function formatCurrency(amount) {
+            if (!amount || amount === 0) return '0';
+            return parseFloat(amount).toLocaleString('en-US');
+        }
+        
+        function applyFilters() {
+            const filterDate = document.getElementById('filterDate').value;
+            const searchRef = document.getElementById('searchRef').value.toLowerCase().trim();
+            const searchSubject = document.getElementById('searchSubject').value.toLowerCase().trim();
+            
+            let filtered = [...allRecords];
+            
+            if (filterDate) {
+                filtered = filtered.filter(record => record.date === filterDate);
+            }
+            
+            if (searchRef) {
+                filtered = filtered.filter(record => 
+                    (record.ref_no || '').toLowerCase().includes(searchRef)
+                );
+            }
+            
+            if (searchSubject) {
+                filtered = filtered.filter(record => 
+                    (record.subject || '').toLowerCase().includes(searchSubject)
+                );
+            }
+            
+            displayRecords(filtered);
+            
+            if (filtered.length !== allRecords.length) {
+                showMessage(`Found ${filtered.length} record(s)`, 'success');
+            }
+        }
+        
+        function resetFilters() {
+            document.getElementById('filterDate').value = '';
+            document.getElementById('searchRef').value = '';
+            document.getElementById('searchSubject').value = '';
+            displayRecords(allRecords);
+            showMessage('Filters reset', 'success');
+        }
+        
+        function downloadMonth() {
+            window.location.href = `/download_excel/${monthName}`;
+        }
+        
+        function goBack() {
+            window.location.href = '/view';
+        }
+        
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function showMessage(message, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.innerHTML = '<i class="fas fa-' + (type === 'success' ? 'check-circle' : 'exclamation-circle') + '"></i> ' + message;
+            messageDiv.className = `message ${type}`;
+            messageDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                messageDiv.style.opacity = '0';
+                setTimeout(() => {
+                    messageDiv.style.display = 'none';
+                    messageDiv.style.opacity = '1';
+                }, 300);
+            }, 3000);
+        }
+        
+        updateDate();
+        loadMonthStats();
+        loadRecords();
+        
+        window.onclick = function(event) {
+            const modal = document.getElementById('deleteRecordModal');
+            if (event.target == modal) {
+                closeDeleteRecordModal();
+            }
+        }
+    </script>
+
+    <script>
+        if (!sessionStorage.getItem('uta_logged_in')) {
+            window.location.replace('/logout');
+        }
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            if (sidebar) sidebar.classList.toggle('active');
+        }
+    </script>
+</body>
+</html>

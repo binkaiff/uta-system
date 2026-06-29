@@ -1,0 +1,25 @@
+{
+  "April_2026": {
+    "display_name": "April 2026",
+    "created_date": "2026-04-30 13:37:52",
+    "opening_balance": 120000.0,
+    "status": "closed",
+    "filename": "excel_sheets/April_2026.xlsx",
+    "closed_date": "2026-04-30 13:38:27"
+  },
+  "June_2026": {
+    "display_name": "June 2026",
+    "created_date": "2026-06-27 00:00:00",
+    "opening_balance": 200000.0,
+    "status": "closed",
+    "filename": "excel_sheets/June_2026.xlsx",
+    "closed_date": "2026-06-27 13:45:52"
+  },
+  "November_2026": {
+    "display_name": "November 2026",
+    "created_date": "2026-11-29 00:00:00",
+    "opening_balance": 111111.0,
+    "status": "active",
+    "filename": "excel_sheets/November_2026.xlsx"
+  }
+}
