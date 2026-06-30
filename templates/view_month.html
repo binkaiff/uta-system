@@ -154,7 +154,7 @@
                     <table class="records-table">
                         <thead>
                             <tr>
-                                <th width="60">Action</th>
+                                <th width="80">Action</th>
                                 <th width="60">#</th>
                                 <th width="120">Ref No</th>
                                 <th width="110">Date</th>
@@ -198,12 +198,77 @@
         </div>
     </div>
 
+    <!-- Edit Record Modal -->
+    <div id="editRecordModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <i class="fas fa-edit"></i>
+                <h3>Edit Record</h3>
+            </div>
+            <p>Update the details below for <strong id="editRefNoLabel"></strong>.</p>
+            <div class="input-group">
+                <label>Date</label>
+                <input type="date" id="editDate" class="modal-input">
+            </div>
+            <div class="input-group">
+                <label>Subject</label>
+                <input type="text" id="editSubject" class="modal-input" placeholder="Enter subject">
+            </div>
+            <div class="input-group">
+                <label>Pass No</label>
+                <input type="text" id="editPassNo" class="modal-input" placeholder="Enter pass no">
+            </div>
+            <div class="input-group">
+                <label>In Payment</label>
+                <input type="text" id="editInPayment" class="modal-input" placeholder="0" inputmode="decimal">
+            </div>
+            <div class="input-group">
+                <label>Out Payment</label>
+                <input type="text" id="editOutPayment" class="modal-input" placeholder="0" inputmode="decimal">
+            </div>
+            <div class="input-group">
+                <label>Sub Agent</label>
+                <input type="text" id="editSubAgent" class="modal-input" placeholder="Enter sub agent">
+            </div>
+            <div class="modal-buttons">
+                <button onclick="confirmUpdateRecord()" class="btn-confirm">
+                    <i class="fas fa-check"></i> Save Changes
+                </button>
+                <button onclick="closeEditRecordModal()" class="btn-cancel">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="message" class="message"></div>
 
     <script>
         let allRecords = [];
         let pendingRecordDelete = null;
+        let pendingRecordEditRefNo = null;
         const monthName = '{{ month_name }}';
+
+        function cleanAmountValue(value) {
+            return String(value || '0').replace(/,/g, '') || '0';
+        }
+
+        function formatAmountValue(value) {
+            const cleaned = String(value || '').replace(/,/g, '').replace(/[^0-9.]/g, '');
+            if (!cleaned) return '';
+            const parts = cleaned.split('.');
+            const whole = parts[0] ? Number(parts[0]).toLocaleString('en-US') : '0';
+            return parts.length > 1 ? whole + '.' + parts.slice(1).join('').slice(0, 2) : whole;
+        }
+
+        ['editInPayment', 'editOutPayment'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('input', function() {
+                    this.value = formatAmountValue(this.value);
+                });
+            }
+        });
 
         function updateDate() {
             const now = new Date();
@@ -261,6 +326,9 @@
             tbody.innerHTML = records.map(record => `
                 <tr class="record-row">
                     <td class="action-cell">
+                        <button onclick="showEditRecordModal('${record.ref_no}')" class="edit-icon-btn" title="Edit Record">
+                            <i class="fas fa-edit"></i>
+                        </button>
                         <button onclick="showDeleteRecordModal('${record.ref_no}', ${record.no})" class="delete-icon-btn" title="Delete Record">
                             <i class="fas fa-trash-alt"></i>
                         </button>
@@ -318,6 +386,70 @@
         function closeDeleteRecordModal() {
             document.getElementById('deleteRecordModal').style.display = 'none';
             pendingRecordDelete = null;
+        }
+
+        function showEditRecordModal(refNo) {
+            const record = allRecords.find(r => String(r.ref_no) === String(refNo));
+            if (!record) return;
+
+            pendingRecordEditRefNo = refNo;
+            document.getElementById('editRefNoLabel').textContent = record.ref_no || '';
+            document.getElementById('editDate').value = record.date || '';
+            document.getElementById('editSubject').value = record.subject || '';
+            document.getElementById('editPassNo').value = record.pass_no || '';
+            document.getElementById('editInPayment').value = record.in_payment ? formatAmountValue(record.in_payment) : '';
+            document.getElementById('editOutPayment').value = record.out_payment ? formatAmountValue(record.out_payment) : '';
+            document.getElementById('editSubAgent').value = record.sub_agent || '';
+            document.getElementById('editRecordModal').style.display = 'flex';
+        }
+
+        function confirmUpdateRecord() {
+            if (!pendingRecordEditRefNo) return;
+
+            const date = document.getElementById('editDate').value;
+            const subject = document.getElementById('editSubject').value.trim();
+
+            if (!date || !subject) {
+                showMessage('Date and Subject are required', 'error');
+                return;
+            }
+
+            fetch('/update_record_in_month', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    month_name: monthName,
+                    ref_no: pendingRecordEditRefNo,
+                    date: date,
+                    subject: subject,
+                    pass_no: document.getElementById('editPassNo').value.trim(),
+                    in_payment: cleanAmountValue(document.getElementById('editInPayment').value),
+                    out_payment: cleanAmountValue(document.getElementById('editOutPayment').value),
+                    sub_agent: document.getElementById('editSubAgent').value.trim()
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(data.message, 'success');
+                    loadRecords();
+                    loadMonthStats();
+                } else {
+                    showMessage('Error: ' + data.message, 'error');
+                }
+                closeEditRecordModal();
+            })
+            .catch(error => {
+                showMessage('Error updating record', 'error');
+                closeEditRecordModal();
+            });
+        }
+
+        function closeEditRecordModal() {
+            document.getElementById('editRecordModal').style.display = 'none';
+            pendingRecordEditRefNo = null;
         }
         
         function formatCurrency(amount) {
@@ -399,8 +531,12 @@
         
         window.onclick = function(event) {
             const modal = document.getElementById('deleteRecordModal');
+            const editModal = document.getElementById('editRecordModal');
             if (event.target == modal) {
                 closeDeleteRecordModal();
+            }
+            if (event.target == editModal) {
+                closeEditRecordModal();
             }
         }
     </script>

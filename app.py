@@ -522,6 +522,57 @@ def delete_record_from_month():
         print(f"Error deleting record: {e}")
         return jsonify({'success': False, 'message': f'Error deleting: {str(e)}'})
 
+@app.route('/update_record_in_month', methods=['POST'])
+@login_required
+def update_record_in_month():
+    """Update a single record in a specific month"""
+    try:
+        data = request.json
+        month_name = data.get('month_name')
+        ref_no = data.get('ref_no')
+
+        if not month_name or not ref_no:
+            return jsonify({'success': False, 'message': 'Missing required data'})
+
+        if not data.get('date') or not data.get('subject'):
+            return jsonify({'success': False, 'message': 'Date and Subject are required'})
+
+        filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
+        if not os.path.exists(filename):
+            return jsonify({'success': False, 'message': 'Month file not found'})
+
+        wb = load_workbook(filename)
+        ws = wb.active
+        row_to_update = None
+        for row in range(3, ws.max_row + 1):
+            if str(ws.cell(row, 2).value or '').strip() == str(ref_no).strip():
+                row_to_update = row
+                break
+
+        if not row_to_update:
+            wb.close()
+            return jsonify({'success': False, 'message': 'Record not found'})
+
+        create_backup('update_record', month_name)
+
+        ws.cell(row_to_update, 3).value = data.get('date', '')
+        ws.cell(row_to_update, 4).value = data.get('subject', '')
+        ws.cell(row_to_update, 5).value = data.get('pass_no', '')
+        ws.cell(row_to_update, 6).value = parse_amount(data.get('in_payment', 0))
+        ws.cell(row_to_update, 7).value = parse_amount(data.get('out_payment', 0))
+        ws.cell(row_to_update, 8).value = data.get('sub_agent', '')
+
+        # Re-sort by date, reassign Ref Nos sequentially, and recalculate balances
+        recalculate_and_sort_sheet(ws)
+
+        wb.save(filename)
+        wb.close()
+        return jsonify({'success': True, 'message': 'Record updated successfully!'})
+
+    except Exception as e:
+        print(f"Error updating record: {e}")
+        return jsonify({'success': False, 'message': f'Error updating: {str(e)}'})
+
 @app.route('/get_month_records/<month_name>')
 @login_required
 def get_month_records(month_name):

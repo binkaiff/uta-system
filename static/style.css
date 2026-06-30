@@ -1321,6 +1321,14 @@ body {
 /* Cell Styles */
 .action-cell {
     text-align: center;
+    white-space: nowrap;
+}
+
+.action-cell .edit-icon-btn,
+.action-cell .delete-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .number-cell {
@@ -1373,6 +1381,24 @@ body {
 .balance-cell {
     font-weight: 700;
     color: #1a1a2e;
+}
+
+/* Edit Icon Button */
+.edit-icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px 8px;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    color: #2563eb;
+    margin-right: 4px;
+}
+
+.edit-icon-btn:hover {
+    background: #2563eb;
+    color: white;
+    transform: scale(1.05);
 }
 
 /* Delete Icon Button */
