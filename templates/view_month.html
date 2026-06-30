@@ -154,7 +154,7 @@
                     <table class="records-table">
                         <thead>
                             <tr>
-                                <th width="90">Action</th>
+                                <th width="60">Action</th>
                                 <th width="60">#</th>
                                 <th width="120">Ref No</th>
                                 <th width="110">Date</th>
@@ -175,56 +175,6 @@
                         </tbody>
                     </table>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Edit Record Modal -->
-    <div id="editRecordModal" class="modal">
-        <div class="modal-content edit-modal">
-            <div class="modal-header edit-modal-header">
-                <i class="fas fa-pen-to-square"></i>
-                <div>
-                    <h3>Edit Record</h3>
-                    <span id="editRefLabel" class="edit-ref-tag"></span>
-                </div>
-                <button onclick="closeEditModal()" class="modal-close-btn"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="edit-modal-body">
-                <div class="edit-form-grid">
-                    <div class="edit-field-group full-width">
-                        <label><i class="fas fa-calendar-alt"></i> Date</label>
-                        <input type="date" id="editDate" class="edit-input">
-                    </div>
-                    <div class="edit-field-group full-width">
-                        <label><i class="fas fa-heading"></i> Subject</label>
-                        <input type="text" id="editSubject" class="edit-input" placeholder="Enter subject">
-                    </div>
-                    <div class="edit-field-group full-width">
-                        <label><i class="fas fa-passport"></i> Pass No</label>
-                        <input type="text" id="editPassNo" class="edit-input" placeholder="Enter pass number">
-                    </div>
-                    <div class="edit-field-group">
-                        <label><i class="fas fa-arrow-down" style="color:#28a745;"></i> In Payment</label>
-                        <input type="number" id="editInPayment" class="edit-input" placeholder="0" min="0">
-                    </div>
-                    <div class="edit-field-group">
-                        <label><i class="fas fa-arrow-up" style="color:#dc3545;"></i> Out Payment</label>
-                        <input type="number" id="editOutPayment" class="edit-input" placeholder="0" min="0">
-                    </div>
-                    <div class="edit-field-group full-width">
-                        <label><i class="fas fa-user-tie"></i> Sub Agent</label>
-                        <input type="text" id="editSubAgent" class="edit-input" placeholder="Enter sub agent name">
-                    </div>
-                </div>
-            </div>
-            <div class="edit-modal-footer">
-                <button onclick="closeEditModal()" class="btn-secondary">
-                    <i class="fas fa-times"></i> Cancel
-                </button>
-                <button onclick="confirmEditRecord()" class="btn-edit-save">
-                    <i class="fas fa-floppy-disk"></i> Save Changes
-                </button>
             </div>
         </div>
     </div>
@@ -251,56 +201,6 @@
     <div id="message" class="message"></div>
 
     <script>
-        let pendingEditRefNo = null;
-
-        function showEditModal(no, refNo, date, subject, passNo, inPayment, outPayment, subAgent) {
-            pendingEditRefNo = refNo;
-            document.getElementById('editRefLabel').textContent = refNo;
-            document.getElementById('editDate').value = date || '';
-            document.getElementById('editSubject').value = subject || '';
-            document.getElementById('editPassNo').value = passNo || '';
-            document.getElementById('editInPayment').value = inPayment || 0;
-            document.getElementById('editOutPayment').value = outPayment || 0;
-            document.getElementById('editSubAgent').value = subAgent || '';
-            document.getElementById('editRecordModal').style.display = 'flex';
-        }
-
-        function closeEditModal() {
-            document.getElementById('editRecordModal').style.display = 'none';
-            pendingEditRefNo = null;
-        }
-
-        function confirmEditRecord() {
-            if (!pendingEditRefNo) return;
-            const payload = {
-                month_name: monthName,
-                ref_no: pendingEditRefNo,
-                date: document.getElementById('editDate').value,
-                subject: document.getElementById('editSubject').value,
-                pass_no: document.getElementById('editPassNo').value,
-                in_payment: document.getElementById('editInPayment').value,
-                out_payment: document.getElementById('editOutPayment').value,
-                sub_agent: document.getElementById('editSubAgent').value,
-            };
-            fetch('/update_record', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    showMessage(data.message, 'success');
-                    loadRecords();
-                    loadMonthStats();
-                } else {
-                    showMessage('Error: ' + data.message, 'error');
-                }
-                closeEditModal();
-            })
-            .catch(() => { showMessage('Error updating record', 'error'); closeEditModal(); });
-        }
-
         let allRecords = [];
         let pendingRecordDelete = null;
         const monthName = '{{ month_name }}';
@@ -361,9 +261,6 @@
             tbody.innerHTML = records.map(record => `
                 <tr class="record-row">
                     <td class="action-cell">
-                        <button onclick="showEditModal(${record.no}, '${record.ref_no}', '${record.date}', \`${record.subject.replace(/`/g,'\\`')}\`, '${record.pass_no}', ${record.in_payment}, ${record.out_payment}, \`${(record.sub_agent||'').replace(/`/g,'\\`')}\`)" class="edit-icon-btn" title="Edit Record">
-                            <i class="fas fa-pen"></i>
-                        </button>
                         <button onclick="showDeleteRecordModal('${record.ref_no}', ${record.no})" class="delete-icon-btn" title="Delete Record">
                             <i class="fas fa-trash-alt"></i>
                         </button>
@@ -501,10 +398,10 @@
         loadRecords();
         
         window.onclick = function(event) {
-            const deleteModal = document.getElementById('deleteRecordModal');
-            const editModal = document.getElementById('editRecordModal');
-            if (event.target == deleteModal) closeDeleteRecordModal();
-            if (event.target == editModal) closeEditModal();
+            const modal = document.getElementById('deleteRecordModal');
+            if (event.target == modal) {
+                closeDeleteRecordModal();
+            }
         }
     </script>
 
