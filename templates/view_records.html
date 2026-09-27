@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UTA Manpower Service - View Records</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=5">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -42,10 +42,6 @@
                     <span>Logout</span>
                 </a>
             </nav>
-            <div class="sidebar-footer">
-                <div class="year">2026</div>
-                <div class="version">v3.0</div>
-            </div>
         </div>
 
         <div class="main-content">
@@ -59,6 +55,13 @@
                     <div class="date-display">
                         <i class="far fa-calendar-alt"></i>
                         <span id="currentDate"></span>
+                    </div>
+                    <div class="user-profile" aria-label="Logged in user">
+                        <img src="{{ url_for('static', filename=current_user_profile.photo) }}" alt="{{ current_user_profile.name }} profile photo" class="user-profile-image">
+                        <div class="user-profile-details">
+                            <span class="user-profile-name">{{ current_user_profile.name }}</span>
+                            <span class="user-profile-role">{{ current_user_profile.role }}</span>
+                        </div>
                     </div>
                 </div>
             </div>

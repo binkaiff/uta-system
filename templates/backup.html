@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UTA Manpower Service - Backup</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=5">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -19,12 +19,20 @@
                 <a href="/backup" class="nav-item active"><i class="fas fa-box-archive"></i><span>Backup</span></a>
                 <a href="/logout" class="nav-item logout-link" onclick="sessionStorage.removeItem('uta_logged_in')"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
             </nav>
-            <div class="sidebar-footer"><div class="year">2026</div><div class="version">v3.0</div></div>
         </div>
 
         <div class="main-content">
             <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
-            <div class="header"><div class="header-title"><h1>Backup</h1><p>Deleted monthly files are stored here</p></div><div class="header-actions"><div class="date-display"><i class="far fa-calendar-alt"></i><span id="currentDate"></span></div></div></div>
+            <div class="header">
+                <div class="header-title"><h1>Backup</h1><p>Deleted monthly files are stored here</p></div>
+                <div class="header-actions">
+                    <div class="date-display"><i class="far fa-calendar-alt"></i><span id="currentDate"></span></div>
+                    <div class="user-profile" aria-label="Logged in user">
+                        <img src="{{ url_for('static', filename=current_user_profile.photo) }}" alt="{{ current_user_profile.name }} profile photo" class="user-profile-image">
+                        <div class="user-profile-details"><span class="user-profile-name">{{ current_user_profile.name }}</span><span class="user-profile-role">{{ current_user_profile.role }}</span></div>
+                    </div>
+                </div>
+            </div>
 
             {% if backup_months %}
                 <div class="months-grid">

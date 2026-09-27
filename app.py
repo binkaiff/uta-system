@@ -42,6 +42,32 @@ def load_users():
 
 USERS = load_users()
 
+# Display information for the two authorised UTA account users.
+# The image files should remain in /static as thanzeel.png and kaiff.png.
+USER_PROFILES = {
+    'thanzeel': {
+        'name': 'Thanzeel',
+        'role': 'Administrator',
+        'photo': 'thanzeel.png',
+    },
+    'kaiff': {
+        'name': 'Kaiff',
+        'role': 'Administrator',
+        'photo': 'kaiff.png',
+    },
+}
+
+@app.context_processor
+def inject_current_user_profile():
+    """Make the signed-in user's display profile available to every template."""
+    username = str(session.get('user', '')).lower()
+    profile = USER_PROFILES.get(username, {
+        'name': username.title() if username else 'User',
+        'role': 'Administrator',
+        'photo': 'logo.png',
+    })
+    return {'current_user_profile': profile}
+
 def login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):

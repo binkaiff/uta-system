@@ -2684,3 +2684,1238 @@ button, input, select, textarea {
         align-self: flex-start;
     }
 }
+/* ==========================================================
+   UTA LIGHT PROFESSIONAL POLISH — v5
+   Keeps the original colourful, easy-to-read UI and only
+   improves spacing, hierarchy, borders, shadows and profiles.
+   ========================================================== */
+
+:root {
+    --uta-navy: #171b33;
+    --uta-navy-2: #1c2949;
+    --uta-red: #cf1737;
+    --uta-red-dark: #9f1029;
+    --uta-green: #25a34a;
+    --uta-blue: #1395ad;
+    --uta-amber: #e89b22;
+    --uta-purple: #7656b8;
+    --uta-bg: #f4f6fa;
+    --uta-card: #ffffff;
+    --uta-border: #e6eaf1;
+    --uta-text: #171b33;
+    --uta-muted: #687184;
+}
+
+body {
+    background: var(--uta-bg);
+    color: var(--uta-text);
+}
+
+.sidebar {
+    width: 270px;
+    background: linear-gradient(180deg, #171b33 0%, #14213d 100%);
+    box-shadow: 5px 0 22px rgba(20, 33, 61, 0.09);
+}
+
+.main-content {
+    margin-left: 270px;
+    padding: 30px 38px 42px;
+    background: var(--uta-bg);
+}
+
+.logo {
+    padding: 27px 24px 25px;
+    margin-bottom: 18px;
+}
+
+.logo-icon {
+    width: 74px;
+    height: 74px;
+    margin-bottom: 13px;
+}
+
+.nav-menu { gap: 7px; }
+
+.nav-item {
+    min-height: 48px;
+    padding: 12px 18px;
+    border-radius: 11px;
+    font-size: 14px;
+}
+
+.nav-item:hover {
+    background: rgba(255,255,255,.085);
+    transform: translateX(2px);
+}
+
+.nav-item.active {
+    background: linear-gradient(135deg, #df1c42, #ad102c);
+    box-shadow: 0 6px 16px rgba(207, 23, 55, .24);
+}
+
+.header {
+    align-items: center;
+    margin-bottom: 26px;
+    gap: 20px;
+}
+
+.header-title h1 {
+    font-size: 31px;
+    letter-spacing: -0.6px;
+    margin-bottom: 6px;
+}
+
+.header-title p {
+    color: var(--uta-muted);
+    font-size: 14px;
+}
+
+.header-actions {
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.date-display,
+.user-profile,
+.ref-preview {
+    min-height: 46px;
+    border-radius: 12px;
+}
+
+.date-display {
+    padding: 10px 15px;
+    border: 1px solid var(--uta-border);
+    color: #5f6878;
+    box-shadow: 0 3px 12px rgba(24, 31, 52, .045);
+}
+
+.date-display i { color: #7c8491; }
+
+.user-profile {
+    background: #fff;
+    border: 1px solid var(--uta-border);
+    padding: 5px 12px 5px 6px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    box-shadow: 0 3px 12px rgba(24, 31, 52, .045);
+}
+
+.user-profile-image {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    object-position: center;
+    border: 2px solid rgba(207, 23, 55, .22);
+    background: #f1f3f7;
+}
+
+.user-profile-details {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+    min-width: 72px;
+}
+
+.user-profile-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--uta-text);
+}
+
+.user-profile-role {
+    font-size: 10px;
+    color: #818898;
+    margin-top: 3px;
+}
+
+.ref-preview {
+    padding: 10px 15px;
+    background: #fff1f4;
+    border: 1px solid #f4cbd4;
+    color: #b11331;
+    box-shadow: none;
+}
+
+.management-card,
+.stat-card,
+.finance-card,
+.form-card,
+.month-card,
+.month-card-item,
+.empty-state-card,
+.records-table-container {
+    border: 1px solid var(--uta-border);
+    box-shadow: 0 5px 16px rgba(31, 39, 67, .055);
+}
+
+.management-card {
+    border-radius: 17px;
+    margin-bottom: 26px;
+}
+
+.management-header {
+    background: linear-gradient(135deg, #171b33, #1b294a);
+    padding: 17px 23px;
+}
+
+.management-header i { color: #f02d50; }
+.management-body { padding: 23px; }
+
+.month-name {
+    font-size: 31px;
+    letter-spacing: -0.5px;
+}
+
+.month-detail-grid {
+    gap: 14px;
+}
+
+.detail-item {
+    border: 1px solid #edf0f5;
+    background: #f8f9fb;
+}
+
+.stats-grid,
+.finance-stats {
+    gap: 16px;
+}
+
+.stat-card,
+.finance-card {
+    border-radius: 14px;
+    padding: 18px;
+}
+
+.stat-card:hover,
+.finance-card:hover,
+.month-card:hover,
+.month-card-item:hover,
+.form-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 9px 22px rgba(31, 39, 67, .09);
+}
+
+.stat-icon-wrapper,
+.finance-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 11px;
+}
+
+/* Easy visual scanning without making the dashboard noisy. */
+.stats-grid .stat-card:nth-child(1) .stat-icon-wrapper {
+    background: linear-gradient(135deg, #d91b40, #aa102b);
+}
+.stats-grid .stat-card:nth-child(2) .stat-icon-wrapper {
+    background: linear-gradient(135deg, #29a84f, #208940);
+}
+.stats-grid .stat-card:nth-child(3) .stat-icon-wrapper {
+    background: linear-gradient(135deg, #1a9fbb, #137d99);
+}
+.stats-grid .stat-card:nth-child(4) .stat-icon-wrapper {
+    background: linear-gradient(135deg, #7a5cc0, #6044a2);
+}
+
+.stat-label,
+.finance-label {
+    color: #687184;
+}
+
+.stat-number { font-size: 26px; }
+.finance-value { font-size: 21px; }
+
+.section-header { margin-bottom: 17px; }
+.section-header h2 { font-size: 21px; }
+
+.months-grid {
+    gap: 18px;
+    margin-top: 16px;
+}
+
+.month-card,
+.month-card-item {
+    border-radius: 14px;
+}
+
+.month-card-header {
+    background: linear-gradient(135deg, #20263e, #3f465a);
+    padding: 15px 18px;
+}
+
+.month-card-item .month-card-header {
+    background: linear-gradient(135deg, #20263e, #3b435a);
+}
+
+.month-card-item:has(.active-status) .month-card-header {
+    background: linear-gradient(135deg, #171b33, #223259);
+}
+
+.month-icon-circle {
+    width: 46px;
+    height: 46px;
+    border-radius: 11px;
+}
+
+.month-name-text { font-size: 19px; }
+.month-card-body { padding: 17px 18px; }
+.month-card-footer { padding: 12px 18px 16px; gap: 9px; }
+
+.btn-view,
+.btn-download,
+.view-records-btn,
+.delete-month-btn {
+    min-height: 38px;
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.btn-view,
+.view-records-btn {
+    background: linear-gradient(135deg, #df2144, #bd1433);
+}
+
+.btn-download {
+    background: linear-gradient(135deg, #2caf55, #249347);
+}
+
+.delete-month-btn {
+    background: #fff1f3;
+    color: #be1836;
+    border: 1px solid #f1ccd4;
+}
+
+.delete-month-btn:hover {
+    background: #d91b40;
+    color: #fff;
+    border-color: #d91b40;
+}
+
+.stats-three-cards {
+    gap: 16px;
+    margin-bottom: 26px;
+}
+
+.stats-three-cards .stat-card { min-height: 92px; }
+.stats-three-cards .stat-icon { width: 50px; height: 50px; border-radius: 12px; }
+.stats-three-cards .stat-value { font-size: 29px; }
+
+/* Enter Records — retain the original large, straightforward form. */
+.entry-controls {
+    background: #fff;
+    border: 1px solid var(--uta-border);
+    border-radius: 14px;
+    padding: 13px 15px;
+    box-shadow: 0 4px 14px rgba(31,39,67,.045);
+}
+
+.entry-controls button {
+    min-height: 42px;
+    border-radius: 9px;
+}
+
+.form-grid { gap: 18px; }
+
+.form-card {
+    border-radius: 15px;
+    overflow: hidden;
+}
+
+.form-card-header {
+    background: linear-gradient(135deg, #20263e, #343d57);
+    padding: 13px 18px;
+}
+
+.form-card-body { padding: 19px; }
+
+.form-group label {
+    color: #4f596c;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    border: 1.5px solid #dfe4ec;
+    background: #fbfcfe;
+    border-radius: 9px;
+    min-height: 43px;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    border-color: #d91b40;
+    box-shadow: 0 0 0 3px rgba(217,27,64,.09);
+    background: #fff;
+}
+
+.btn-add-inline {
+    background: linear-gradient(135deg, #2ba950, #228b42);
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(40,167,69,.23);
+}
+
+.btn-save {
+    background: linear-gradient(135deg, #d91b40, #ad102d);
+}
+
+.btn-clear {
+    background: #eef1f5;
+    color: #4f5968;
+    border: 1px solid #dce1e9 !important;
+}
+
+.btn-clear:hover { color: #2c3444; }
+
+/* Month detail page — keep colour coding strong and readable. */
+.month-stats-grid { gap: 16px; }
+.stat-card-primary,
+.stat-card-success,
+.stat-card-warning,
+.stat-card-info {
+    border-radius: 14px;
+    border: 1px solid var(--uta-border);
+    box-shadow: 0 5px 16px rgba(31,39,67,.055);
+}
+
+.filter-section,
+.table-section,
+.table-container {
+    border-color: var(--uta-border);
+}
+
+.records-table th {
+    background: #20263e;
+    color: #fff;
+}
+
+.records-table tbody tr:hover {
+    background: #fff7f8;
+}
+
+/* Backup page: same familiar cards, slightly more distinct from live months. */
+.backup-restore-btn {
+    background: #fff4df !important;
+    color: #9a6410 !important;
+    border: 1px solid #f0d5a7 !important;
+}
+
+.backup-restore-btn:hover {
+    background: #e89b22 !important;
+    color: #fff !important;
+}
+
+/* Buttons and modals: less glossy, more predictable. */
+button { font-family: inherit; }
+
+.btn-end-month,
+.btn-create-month,
+.btn-excel,
+.btn-back,
+.modal-delete-btn,
+.modal-cancel-btn,
+.create-first-btn {
+    border-radius: 9px !important;
+}
+
+.modal-container,
+.modal-content {
+    border-radius: 16px;
+    border: 1px solid var(--uta-border);
+}
+
+@media (max-width: 1200px) {
+    .sidebar { width: 245px; }
+    .main-content { margin-left: 245px; padding: 25px; }
+    .header-actions { max-width: 58%; }
+}
+
+@media (max-width: 900px) {
+    .main-content {
+        margin-left: 0;
+        padding: 76px 18px 30px;
+    }
+
+    .header {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .header-actions {
+        width: 100%;
+        max-width: none;
+        justify-content: flex-start;
+    }
+
+    .date-display { flex: 1 1 210px; }
+    .user-profile { flex: 0 0 auto; }
+    .ref-preview { flex: 1 1 170px; }
+}
+
+@media (max-width: 600px) {
+    .main-content { padding: 70px 13px 24px; }
+    .header-title h1 { font-size: 26px; }
+    .header-actions { gap: 8px; }
+    .date-display {
+        width: 100%;
+        flex-basis: 100%;
+        font-size: 12px;
+    }
+    .user-profile {
+        min-height: 42px;
+        padding-right: 10px;
+    }
+    .user-profile-image { width: 32px; height: 32px; min-width: 32px; }
+    .user-profile-role { display: none; }
+    .user-profile-details { min-width: auto; }
+    .ref-preview { flex-basis: 100%; }
+    .stats-grid,
+    .finance-stats,
+    .stats-three-cards,
+    .month-stats-grid { gap: 11px; }
+    .stat-card,
+    .finance-card { padding: 15px; }
+    .month-card-body,
+    .month-card-item .month-card-body,
+    .form-card-body { padding: 15px; }
+}
+
+
+/* =========================================================
+   ENTER RECORDS — BOTTOM ACTION BAR
+   Add / Save / Clear in one clear row below the record cards.
+   ========================================================= */
+.record-footer-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 22px 0 12px;
+    flex-wrap: wrap;
+}
+
+.record-footer-actions .btn-add-inline,
+.record-footer-actions .footer-action-btn {
+    min-height: 46px;
+    padding: 13px 24px;
+    border: none;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
+    white-space: nowrap;
+}
+
+.record-footer-actions .btn-add-inline {
+    background: linear-gradient(135deg, #2ba950, #228b42);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(40, 167, 69, .23);
+}
+
+.record-footer-actions .btn-save {
+    background: linear-gradient(135deg, #d91b40, #ad102d);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(217, 27, 64, .20);
+}
+
+.record-footer-actions .btn-clear {
+    background: #eef1f5;
+    color: #4f5968;
+    border: 1px solid #dce1e9;
+    box-shadow: 0 3px 10px rgba(31, 39, 67, .08);
+}
+
+.record-footer-actions .btn-add-inline:hover,
+.record-footer-actions .footer-action-btn:hover {
+    transform: translateY(-2px);
+}
+
+.record-footer-actions .btn-add-inline:hover {
+    box-shadow: 0 7px 18px rgba(40, 167, 69, .30);
+}
+
+.record-footer-actions .btn-save:hover {
+    box-shadow: 0 7px 18px rgba(217, 27, 64, .27);
+}
+
+.record-footer-actions .btn-clear:hover {
+    background: #e5e9ef;
+    color: #2c3444;
+    box-shadow: 0 5px 14px rgba(31, 39, 67, .12);
+}
+
+@media (max-width: 700px) {
+    .record-footer-actions {
+        gap: 10px;
+        padding-top: 18px;
+    }
+
+    .record-footer-actions .btn-add-inline,
+    .record-footer-actions .footer-action-btn {
+        flex: 1 1 100%;
+        width: 100%;
+    }
+}
+
+
+/* =========================================================
+   DASHBOARD — COMPACT MONTH DETAIL CARDS
+   Keeps the original UTA look but makes Created / Opening
+   Balance cleaner, smaller and easier to scan.
+   ========================================================= */
+.month-detail-grid {
+    gap: 16px;
+    align-items: stretch;
+}
+
+.detail-item.compact-detail-card {
+    min-width: 220px;
+    min-height: 76px;
+    padding: 13px 17px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+    text-align: left;
+    background: #ffffff;
+    border: 1px solid #e6e9ef;
+    border-radius: 14px;
+    box-shadow: 0 4px 12px rgba(31, 39, 67, 0.06);
+}
+
+.compact-detail-card .detail-icon {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.compact-detail-card .detail-icon i {
+    display: inline-block;
+    margin: 0;
+    font-size: 17px;
+}
+
+.created-detail-card .detail-icon {
+    background: #fff0f3;
+    color: #d91b40;
+}
+
+.created-detail-card .detail-icon i {
+    color: #d91b40;
+}
+
+.opening-balance-card .detail-icon {
+    background: #eef3fb;
+    color: #1b294a;
+}
+
+.opening-balance-card .detail-icon i {
+    color: #1b294a;
+}
+
+.compact-detail-card .detail-content {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.compact-detail-card .detail-content span {
+    display: block;
+    margin: 0 0 4px;
+    font-size: 12px;
+    line-height: 1.2;
+    font-weight: 600;
+    color: #6b7280;
+}
+
+.compact-detail-card .detail-content strong {
+    display: block;
+    margin: 0;
+    font-size: 18px;
+    line-height: 1.15;
+    font-weight: 800;
+    color: #171b33;
+    letter-spacing: -0.2px;
+}
+
+.opening-balance-card .detail-content strong {
+    font-size: 22px;
+}
+
+@media (max-width: 700px) {
+    .month-detail-grid {
+        width: 100%;
+        gap: 10px;
+    }
+
+    .detail-item.compact-detail-card {
+        width: 100%;
+        min-width: 0;
+        min-height: 70px;
+        padding: 12px 14px;
+    }
+
+    .compact-detail-card .detail-icon {
+        width: 40px;
+        height: 40px;
+        flex-basis: 40px;
+    }
+
+    .compact-detail-card .detail-content strong {
+        font-size: 17px;
+    }
+
+    .opening-balance-card .detail-content strong {
+        font-size: 20px;
+    }
+}
+
+
+/* =========================================================
+   VIEW RECORDS — LIGHT PROFESSIONAL REFINEMENT
+   Keeps the familiar UTA layout while reducing excessive red.
+   ========================================================= */
+.view-records-page .section-header h2 i {
+    color: #24324f;
+}
+
+.view-records-page .stats-three-cards .stat-card {
+    border: 1px solid #e1e6ef;
+    box-shadow: 0 5px 16px rgba(20, 28, 50, 0.05);
+}
+
+/* Total months: navy instead of red */
+.view-records-page .stats-three-cards .stat-card:first-child .stat-icon,
+.view-records-page .stats-three-cards .red-icon {
+    background: #eef2f8;
+    color: #24324f;
+}
+
+.view-records-page .stats-three-cards .stat-card:first-child .stat-icon i,
+.view-records-page .stats-three-cards .red-icon i {
+    color: #24324f;
+}
+
+/* Keep active green and archived neutral */
+.view-records-page .stats-three-cards .green-icon {
+    background: #eaf7ee;
+    color: #239447;
+}
+
+.view-records-page .stats-three-cards .gray-icon {
+    background: #eef1f5;
+    color: #606978;
+}
+
+.view-records-page .month-card-item {
+    border: 1px solid #e0e5ed;
+    box-shadow: 0 5px 16px rgba(20, 28, 50, 0.05);
+    overflow: hidden;
+}
+
+.view-records-page .month-card-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 9px 22px rgba(20, 28, 50, 0.08);
+}
+
+.view-records-page .month-card-item .month-card-header {
+    background: linear-gradient(135deg, #252c45, #3d465e);
+}
+
+.view-records-page .month-card-item:has(.active-status) .month-card-header {
+    background: linear-gradient(135deg, #18213b, #263b67);
+}
+
+.view-records-page .month-icon-circle {
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.view-records-page .month-year-tag {
+    background: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+}
+
+.view-records-page .month-details-list .detail-line i {
+    color: #6f7a8b;
+}
+
+.view-records-page .month-details-list .detail-line {
+    color: #646c79;
+}
+
+/* Closed is neutral; red is reserved for destructive actions */
+.view-records-page .closed-status {
+    background: #f0f2f5;
+    color: #606978;
+}
+
+.view-records-page .closed-status i {
+    color: #737c89;
+}
+
+.view-records-page .active-status {
+    background: #e8f5eb;
+    color: #218642;
+}
+
+.view-records-page .active-status i {
+    color: #218642;
+}
+
+/* Primary action is now navy, matching the sidebar/header */
+.view-records-page .view-records-btn {
+    background: linear-gradient(135deg, #1b2440, #2d395d);
+    color: #ffffff;
+    border: 1px solid #1b2440;
+    box-shadow: none;
+}
+
+.view-records-page .view-records-btn:hover {
+    background: linear-gradient(135deg, #131a30, #24304f);
+    transform: translateY(-1px);
+}
+
+/* Delete action: clean white button with red text/icon */
+.view-records-page .delete-month-btn {
+    background: #ffffff;
+    color: #d7193f;
+    border: 1px solid #dfe3ea;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.view-records-page .delete-month-btn i {
+    color: #d7193f;
+}
+
+.view-records-page .delete-month-btn:hover {
+    background: #ffffff;
+    color: #c51639;
+    border-color: #cfd5df;
+    box-shadow: 0 3px 8px rgba(15, 23, 42, 0.07);
+    transform: translateY(-1px);
+}
+
+.view-records-page .delete-month-btn:hover i {
+    color: #c51639;
+}
+
+.view-records-page .month-card-footer {
+    background: #fafbfc;
+    border-top: 1px solid #edf0f4;
+}
+
+@media (max-width: 700px) {
+    .view-records-page .view-records-btn,
+    .view-records-page .delete-month-btn {
+        min-height: 42px;
+    }
+}
+
+
+/* =========================================================
+   CREATE MONTH MODAL — PROFESSIONAL LIGHT REFINEMENT
+   Keeps the familiar UTA visual language while reducing
+   heavy colours and improving readability.
+   ========================================================= */
+#createModal.create-month-modal {
+    background: rgba(14, 21, 38, 0.46);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    padding: 22px;
+    align-items: center;
+    justify-content: center;
+}
+
+#createModal.create-month-modal[style*="display: block"] {
+    display: flex !important;
+}
+
+#createModal .create-month-modal-card {
+    width: 100%;
+    max-width: 500px;
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+    border: 1px solid #dfe4ec;
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 24px 70px rgba(13, 23, 43, 0.22);
+    animation: createMonthModalIn 0.22s ease-out;
+}
+
+#createModal .create-month-modal-header {
+    min-height: 78px;
+    padding: 17px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    background: #ffffff;
+    border-top: 4px solid #1c2847;
+    border-bottom: 1px solid #edf0f4;
+}
+
+#createModal .create-month-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    min-width: 0;
+}
+
+#createModal .create-month-icon {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: #f4f6fa;
+    color: #24324f;
+    font-size: 18px;
+    border: 1px solid #e6eaf0;
+}
+
+#createModal .create-month-modal-header h3 {
+    margin: 0;
+    color: #171b2d;
+    font-size: 20px;
+    font-weight: 750;
+    line-height: 1.2;
+}
+
+#createModal .create-month-modal-header span {
+    display: block;
+    margin-top: 3px;
+    color: #7a8392;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+#createModal .create-month-close {
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e1e6ed;
+    border-radius: 10px;
+    background: #f8f9fb;
+    color: #687283;
+    cursor: pointer;
+    transition: 0.18s ease;
+}
+
+#createModal .create-month-close:hover {
+    background: #eef1f5;
+    color: #1f2937;
+}
+
+#createModal .create-month-modal-body {
+    padding: 22px 24px 20px;
+}
+
+#createModal .create-month-description {
+    margin: 0 0 20px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: #f7f8fa;
+    border: 1px solid #eceff3;
+    color: #626b79;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+#createModal .create-month-field {
+    margin-bottom: 18px;
+}
+
+#createModal .create-month-field:last-child {
+    margin-bottom: 0;
+}
+
+#createModal .create-month-field label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 8px;
+    color: #2f3747;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+#createModal .create-month-field label i {
+    width: 15px;
+    text-align: center;
+    color: #69758a;
+}
+
+#createModal .create-month-input {
+    width: 100%;
+    height: 48px;
+    padding: 0 14px;
+    border: 1px solid #dbe1e9;
+    border-radius: 10px;
+    background: #ffffff;
+    color: #1c2333;
+    font-size: 15px;
+    font-weight: 500;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+#createModal .create-month-input:hover {
+    border-color: #c8d0dc;
+}
+
+#createModal .create-month-input:focus {
+    outline: none;
+    border-color: #52617d;
+    box-shadow: 0 0 0 3px rgba(36, 50, 79, 0.09);
+}
+
+#createModal .amount-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+#createModal .amount-prefix {
+    position: absolute;
+    left: 14px;
+    z-index: 1;
+    color: #6f7887;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    pointer-events: none;
+}
+
+#createModal .amount-input {
+    padding-left: 56px;
+}
+
+#createModal .create-month-field small {
+    display: block;
+    margin-top: 7px;
+    color: #8a92a0;
+    font-size: 11.5px;
+    line-height: 1.4;
+}
+
+#createModal .create-month-modal-footer {
+    padding: 15px 24px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    background: #fafbfc;
+    border-top: 1px solid #edf0f4;
+}
+
+#createModal .create-month-cancel-btn,
+#createModal .create-month-primary-btn {
+    min-height: 42px;
+    border-radius: 9px;
+    padding: 0 18px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: 0.18s ease;
+}
+
+#createModal .create-month-cancel-btn {
+    background: #ffffff;
+    color: #4f5968;
+    border: 1px solid #d6dce5;
+}
+
+#createModal .create-month-cancel-btn:hover {
+    background: #f2f4f7;
+    border-color: #c8d0da;
+}
+
+#createModal .create-month-primary-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: #1d2948;
+    color: #ffffff;
+    border: 1px solid #1d2948;
+    box-shadow: 0 4px 10px rgba(29, 41, 72, 0.13);
+}
+
+#createModal .create-month-primary-btn:hover {
+    background: #141f3a;
+    border-color: #141f3a;
+    transform: translateY(-1px);
+}
+
+#createModal .create-month-primary-btn i {
+    font-size: 11px;
+}
+
+@keyframes createMonthModalIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.985);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@media (max-width: 600px) {
+    #createModal.create-month-modal {
+        padding: 14px;
+        align-items: flex-end;
+    }
+
+    #createModal .create-month-modal-card {
+        max-width: none;
+        border-radius: 16px;
+    }
+
+    #createModal .create-month-modal-header {
+        min-height: 72px;
+        padding: 15px 16px;
+    }
+
+    #createModal .create-month-modal-body {
+        padding: 18px 16px;
+    }
+
+    #createModal .create-month-modal-footer {
+        padding: 13px 16px 16px;
+    }
+
+    #createModal .create-month-cancel-btn,
+    #createModal .create-month-primary-btn {
+        flex: 1;
+        padding: 0 12px;
+    }
+}
+
+/* =========================================================
+   FINAL OVERRIDE — VIEW RECORDS DELETE BUTTON
+   White background only; red text/icon. Keeps the existing
+   UTA layout and prevents older pink/red rules overriding it.
+   ========================================================= */
+.delete-month-btn,
+.month-card-footer .delete-month-btn,
+.view-records-page .delete-month-btn {
+    background: #ffffff !important;
+    background-image: none !important;
+    color: #d7193f !important;
+    border: 1px solid #dfe3ea !important;
+    box-shadow: none !important;
+}
+
+.delete-month-btn i,
+.month-card-footer .delete-month-btn i,
+.view-records-page .delete-month-btn i {
+    color: #d7193f !important;
+}
+
+.delete-month-btn:hover,
+.month-card-footer .delete-month-btn:hover,
+.view-records-page .delete-month-btn:hover {
+    background: #ffffff !important;
+    background-image: none !important;
+    color: #c51639 !important;
+    border-color: #cfd5df !important;
+    box-shadow: 0 3px 8px rgba(15, 23, 42, 0.06) !important;
+    transform: translateY(-1px);
+}
+
+.delete-month-btn:hover i,
+.month-card-footer .delete-month-btn:hover i,
+.view-records-page .delete-month-btn:hover i {
+    color: #c51639 !important;
+}
+
+/* =========================================================
+   FINAL USER UI OVERRIDES
+   ========================================================= */
+
+/* View Records: Delete button stays white, with red icon/text only. */
+.delete-month-btn,
+.month-card-footer .delete-month-btn,
+.view-records-page .delete-month-btn {
+    background: #ffffff !important;
+    background-image: none !important;
+    color: #d7193f !important;
+    border: 1px solid #dfe3ea !important;
+    box-shadow: none !important;
+}
+
+.delete-month-btn i,
+.month-card-footer .delete-month-btn i,
+.view-records-page .delete-month-btn i {
+    color: #d7193f !important;
+}
+
+.delete-month-btn:hover,
+.month-card-footer .delete-month-btn:hover,
+.view-records-page .delete-month-btn:hover {
+    background: #ffffff !important;
+    background-image: none !important;
+    color: #c51639 !important;
+    border-color: #cfd5df !important;
+    box-shadow: 0 3px 8px rgba(15, 23, 42, 0.06) !important;
+    transform: translateY(-1px);
+}
+
+.delete-month-btn:hover i,
+.month-card-footer .delete-month-btn:hover i,
+.view-records-page .delete-month-btn:hover i {
+    color: #c51639 !important;
+}
+
+/* Closed status: neutral badge, black text, grey lock icon. */
+.closed-status,
+.view-records-page .closed-status {
+    background: #f0f2f5 !important;
+    color: #111827 !important;
+}
+
+.closed-status i,
+.view-records-page .closed-status i {
+    color: #737c89 !important;
+}
+
+/* =========================================================
+   FINAL OVERRIDE — VIEW RECORDS BUTTON SHAPE
+   Match the compact button shape used on Dashboard month cards.
+   Shape only: existing colours and button behaviour are preserved.
+   ========================================================= */
+.view-records-btn,
+.delete-month-btn,
+.view-records-page .view-records-btn,
+.view-records-page .delete-month-btn {
+    padding: 8px !important;
+    min-height: unset !important;
+    height: auto !important;
+    border-radius: 8px !important;
+}

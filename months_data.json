@@ -19,7 +19,40 @@
     "display_name": "November 2026",
     "created_date": "2026-11-29 00:00:00",
     "opening_balance": 111111.0,
-    "status": "active",
-    "filename": "excel_sheets/November_2026.xlsx"
+    "status": "closed",
+    "filename": "excel_sheets/November_2026.xlsx",
+    "closed_date": "2026-09-28 01:38:33"
+  },
+  "September_2026": {
+    "display_name": "September 2026",
+    "created_date": "2026-09-27 00:00:00",
+    "opening_balance": 6666.0,
+    "status": "closed",
+    "filename": "excel_sheets/September_2026.xlsx",
+    "closed_date": "2026-09-28 02:13:07"
+  },
+  "October_2026": {
+    "display_name": "October 2026",
+    "created_date": "2026-10-27 00:00:00",
+    "opening_balance": 1111.0,
+    "status": "closed",
+    "filename": "excel_sheets/October_2026.xlsx",
+    "closed_date": "2026-09-28 02:13:34"
+  },
+  "December_2026": {
+    "display_name": "December 2026",
+    "created_date": "2026-12-27 00:00:00",
+    "opening_balance": 2222.0,
+    "status": "closed",
+    "filename": "excel_sheets/December_2026.xlsx",
+    "closed_date": "2026-09-28 02:16:05"
+  },
+  "September_2027": {
+    "display_name": "September 2027",
+    "created_date": "2027-09-27 00:00:00",
+    "opening_balance": 0.0,
+    "status": "closed",
+    "filename": "excel_sheets/September_2027.xlsx",
+    "closed_date": "2026-09-28 02:50:43"
   }
 }

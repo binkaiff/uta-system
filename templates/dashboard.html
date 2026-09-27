@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UTA Manpower Service - Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=7">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -56,6 +56,13 @@
                         <i class="far fa-calendar-alt"></i>
                         <span id="currentDate"></span>
                     </div>
+                    <div class="user-profile" aria-label="Logged in user">
+                        <img src="{{ url_for('static', filename=current_user_profile.photo) }}" alt="{{ current_user_profile.name }} profile photo" class="user-profile-image">
+                        <div class="user-profile-details">
+                            <span class="user-profile-name">{{ current_user_profile.name }}</span>
+                            <span class="user-profile-role">{{ current_user_profile.role }}</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -75,15 +82,24 @@
                                     </div>
                                     <div class="month-name">{{ months_data[active_month].display_name }}</div>
                                     <div class="month-detail-grid">
-                                        <div class="detail-item">
-                                            <i class="fas fa-calendar"></i>
-                                            <span>Created</span>
-                                            <strong>{{ months_data[active_month].created_date.split()[0] }}</strong>
+                                        <div class="detail-item compact-detail-card created-detail-card">
+                                            <div class="detail-icon">
+                                                <i class="fas fa-calendar"></i>
+                                            </div>
+                                            <div class="detail-content">
+                                                <span>Created</span>
+                                                <strong>{{ months_data[active_month].created_date.split()[0] }}</strong>
+                                            </div>
                                         </div>
-                                        <div class="detail-item">
-                                            
-                                            <span>Opening Balance</span>
-                                            <strong>{{ months_data[active_month].opening_balance|amount }}</strong>
+
+                                        <div class="detail-item compact-detail-card opening-balance-card">
+                                            <div class="detail-icon">
+                                                <i class="fas fa-wallet"></i>
+                                            </div>
+                                            <div class="detail-content">
+                                                <span>Opening Balance</span>
+                                                <strong>{{ months_data[active_month].opening_balance|amount }}</strong>
+                                            </div>
                                         </div>
                                     </div>
                                     <button onclick="endMonth()" class="btn-end-month"
@@ -247,27 +263,56 @@
     </div>
 
     <!-- Create Month Modal -->
-    <div id="createModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <i class="fas fa-calendar-plus"></i>
-                <h3>Create New Month</h3>
-            </div>
-            <p>Enter the creation date and opening balance for the new month.</p>
-            <div class="input-group">
-                <label>Creation Date</label>
-                <input type="date" id="creationDate" class="modal-input">
-            </div>
-            <div class="input-group">
-                <label>Opening Balance</label>
-                <input type="text" id="openingBalance" class="modal-input" placeholder="Enter opening balance" inputmode="decimal">
-            </div>
-            <div class="modal-buttons">
-                <button onclick="createMonth()" class="btn-confirm">
-                    <i class="fas fa-check"></i> Create Month
+    <div id="createModal" class="modal create-month-modal" role="dialog" aria-modal="true" aria-labelledby="createMonthTitle">
+        <div class="modal-content create-month-modal-card">
+            <div class="create-month-modal-header">
+                <div class="create-month-title-wrap">
+                    <div class="create-month-icon">
+                        <i class="fas fa-calendar-plus"></i>
+                    </div>
+                    <div>
+                        <h3 id="createMonthTitle">Create New Month</h3>
+                        <span>Start a new accounting period</span>
+                    </div>
+                </div>
+                <button type="button" class="create-month-close" onclick="closeModal()" aria-label="Close create month dialog">
+                    <i class="fas fa-times"></i>
                 </button>
-                <button onclick="closeModal()" class="btn-cancel">
-                    <i class="fas fa-times"></i> Cancel
+            </div>
+
+            <div class="create-month-modal-body">
+                <p class="create-month-description">
+                    Choose the month creation date and enter the opening balance to begin recording transactions.
+                </p>
+
+                <div class="create-month-field">
+                    <label for="creationDate">
+                        <i class="far fa-calendar-alt"></i>
+                        Creation Date
+                    </label>
+                    <input type="date" id="creationDate" class="modal-input create-month-input">
+                </div>
+
+                <div class="create-month-field">
+                    <label for="openingBalance">
+                        <i class="fas fa-wallet"></i>
+                        Opening Balance
+                    </label>
+                    <div class="amount-input-wrap">
+                        <span class="amount-prefix">LKR</span>
+                        <input type="text" id="openingBalance" class="modal-input create-month-input amount-input" placeholder="0.00" inputmode="decimal">
+                    </div>
+                    <small>This will become the starting balance for the new month.</small>
+                </div>
+            </div>
+
+            <div class="create-month-modal-footer">
+                <button type="button" onclick="closeModal()" class="create-month-cancel-btn">
+                    Cancel
+                </button>
+                <button type="button" onclick="createMonth()" class="create-month-primary-btn">
+                    <i class="fas fa-plus"></i>
+                    Create Month
                 </button>
             </div>
         </div>
