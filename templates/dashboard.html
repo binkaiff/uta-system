@@ -263,57 +263,36 @@
     </div>
 
     <!-- Create Month Modal -->
-    <div id="createModal" class="modal create-month-modal" role="dialog" aria-modal="true" aria-labelledby="createMonthTitle">
-        <div class="modal-content create-month-modal-card">
-            <div class="create-month-modal-header">
-                <div class="create-month-title-wrap">
-                    <div class="create-month-icon">
-                        <i class="fas fa-calendar-plus"></i>
-                    </div>
-                    <div>
-                        <h3 id="createMonthTitle">Create New Month</h3>
-                        <span>Start a new accounting period</span>
-                    </div>
-                </div>
-                <button type="button" class="create-month-close" onclick="closeModal()" aria-label="Close create month dialog">
-                    <i class="fas fa-times"></i>
-                </button>
+    <div id="createModal" class="modal old-create-month-modal" role="dialog" aria-modal="true" aria-labelledby="createMonthTitle">
+        <div class="modal-content old-create-month-card">
+            <div class="old-create-month-header">
+                <i class="fas fa-calendar-plus"></i>
+                <h3 id="createMonthTitle">Create New Month</h3>
             </div>
 
-            <div class="create-month-modal-body">
-                <p class="create-month-description">
-                    Choose the month creation date and enter the opening balance to begin recording transactions.
+            <div class="old-create-month-body">
+                <p class="old-create-month-description">
+                    Enter the creation date and opening balance for the new month.
                 </p>
 
-                <div class="create-month-field">
-                    <label for="creationDate">
-                        <i class="far fa-calendar-alt"></i>
-                        Creation Date
-                    </label>
-                    <input type="date" id="creationDate" class="modal-input create-month-input">
+                <div class="old-create-month-field">
+                    <label for="creationDate">Creation Date</label>
+                    <input type="date" id="creationDate" class="old-create-month-input">
                 </div>
 
-                <div class="create-month-field">
-                    <label for="openingBalance">
-                        <i class="fas fa-wallet"></i>
-                        Opening Balance
-                    </label>
-                    <div class="amount-input-wrap">
-                        <span class="amount-prefix">LKR</span>
-                        <input type="text" id="openingBalance" class="modal-input create-month-input amount-input" placeholder="0.00" inputmode="decimal">
-                    </div>
-                    <small>This will become the starting balance for the new month.</small>
+                <div class="old-create-month-field">
+                    <label for="openingBalance">Opening Balance</label>
+                    <input type="text" id="openingBalance" class="old-create-month-input" placeholder="Enter opening balance" inputmode="decimal">
                 </div>
-            </div>
 
-            <div class="create-month-modal-footer">
-                <button type="button" onclick="closeModal()" class="create-month-cancel-btn">
-                    Cancel
-                </button>
-                <button type="button" onclick="createMonth()" class="create-month-primary-btn">
-                    <i class="fas fa-plus"></i>
-                    Create Month
-                </button>
+                <div class="old-create-month-actions">
+                    <button type="button" onclick="createMonth()" class="old-create-confirm-btn">
+                        <i class="fas fa-check"></i> Create Month
+                    </button>
+                    <button type="button" onclick="closeModal()" class="old-create-cancel-btn">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
             </div>
         </div>
     </div>
