@@ -4215,3 +4215,106 @@ button { font-family: inherit; }
     .saved-cheques-heading { align-items:flex-start; }
 }
 
+
+/* =========================================================
+   FINAL VIEW RECORDS BUTTON UPDATE
+   White background + red text/icon
+   Matches the current white Delete button style
+   ========================================================= */
+
+/* Dashboard month cards */
+.btn-view,
+.btn-view:link,
+.btn-view:visited {
+    flex: 1;
+    background: #ffffff !important;
+    color: #DC143C !important;
+    border: 1px solid #d8dee8 !important;
+    padding: 8px !important;
+    border-radius: 8px !important;
+    cursor: pointer;
+    font-weight: 600 !important;
+    transition: all 0.2s ease !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 13px;
+    text-decoration: none !important;
+    box-shadow: none !important;
+}
+
+.btn-view i {
+    color: #DC143C !important;
+}
+
+.btn-view:hover,
+.btn-view:focus,
+.btn-view:active {
+    background: #f8f9fb !important;
+    color: #DC143C !important;
+    border-color: #cbd2dd !important;
+    text-decoration: none !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 3px 8px rgba(15, 23, 42, 0.06) !important;
+}
+
+.btn-view:hover i,
+.btn-view:focus i,
+.btn-view:active i {
+    color: #DC143C !important;
+}
+
+
+/* View Records page month cards */
+.view-records-btn,
+.view-records-btn:link,
+.view-records-btn:visited,
+.view-records-page .view-records-btn,
+.view-records-page .view-records-btn:link,
+.view-records-page .view-records-btn:visited {
+    flex: 1;
+    background: #ffffff !important;
+    color: #DC143C !important;
+    border: 1px solid #d8dee8 !important;
+    padding: 10px !important;
+    border-radius: 10px !important;
+    font-weight: 600 !important;
+    cursor: pointer;
+    transition: all 0.2s ease !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 13px;
+    text-decoration: none !important;
+    box-shadow: none !important;
+}
+
+.view-records-btn i,
+.view-records-page .view-records-btn i {
+    color: #DC143C !important;
+}
+
+.view-records-btn:hover,
+.view-records-btn:focus,
+.view-records-btn:active,
+.view-records-page .view-records-btn:hover,
+.view-records-page .view-records-btn:focus,
+.view-records-page .view-records-btn:active {
+    background: #f8f9fb !important;
+    color: #DC143C !important;
+    border-color: #cbd2dd !important;
+    text-decoration: none !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 3px 8px rgba(15, 23, 42, 0.06) !important;
+}
+
+.view-records-btn:hover i,
+.view-records-btn:focus i,
+.view-records-btn:active i,
+.view-records-page .view-records-btn:hover i,
+.view-records-page .view-records-btn:focus i,
+.view-records-page .view-records-btn:active i {
+    color: #DC143C !important;
+}
