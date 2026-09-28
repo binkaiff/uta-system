@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Candidate Registration - UTA Candidate Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<style>
+.candidate-system-badge{display:inline-flex;align-items:center;gap:7px;background:#fff1f3;color:#b4233d;border:1px solid #ffd4dc;border-radius:999px;padding:7px 12px;font-size:12px;font-weight:700}
+.candidate-welcome{background:white;border:1px solid #eef2f6;border-radius:18px;padding:28px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.candidate-welcome h3{color:#1a1a2e;margin-bottom:8px}
+.candidate-welcome p{color:#667085;line-height:1.6}
+.candidate-next-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:20px}
+.candidate-next-card{background:#fff;border:1px solid #eef2f6;border-radius:16px;padding:20px}
+.candidate-next-card i{color:#DC143C;font-size:23px;margin-bottom:12px}
+.candidate-next-card h4{color:#1a1a2e;margin-bottom:7px}
+.candidate-next-card p{color:#667085;font-size:13px;line-height:1.5}
+@media(max-width:900px){.candidate-next-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="dashboard-container">
+
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon"><img src="{{ url_for('static', filename='logo.png') }}" alt="UTA Logo"></div>
+                <h2>UTA</h2><p>Manpower Service</p><span class="license-badge">SLBFE Licensed</span>
+            </div>
+            <nav class="nav-menu">
+                <a href="{{ url_for('candidate_dashboard') }}" class="nav-item {{ 'active' if 'registration' == 'dashboard' else '' }}"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+                <a href="{{ url_for('candidate_registration') }}" class="nav-item {{ 'active' if 'registration' == 'registration' else '' }}"><i class="fas fa-user-plus"></i><span>Registration</span></a>
+                <a href="{{ url_for('candidate_invoice') }}" class="nav-item {{ 'active' if 'registration' == 'invoice' else '' }}"><i class="fas fa-file-invoice"></i><span>Invoice</span></a>
+                <a href="{{ url_for('logout') }}" class="nav-item"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+            </nav>
+        </aside>
+
+<main class="main-content">
+<header class="header">
+<div class="header-title"><h1>Candidate Registration</h1><p>Add and manage candidate information.</p></div>
+<div class="header-actions"><div class="date-display"><i class="fas fa-calendar-alt"></i><span>{{ current_date }}</span></div><div class="candidate-system-badge"><i class="fas fa-users"></i> Candidate System</div></div>
+</header>
+<div class="candidate-welcome"><h3>Registration</h3><p>The route is ready and protected. In Step 2 we will place the complete registration form from your Candidate Management System example here and save candidates on the PythonAnywhere server.</p></div>
+</main>
+</div>
+</body>
+</html>

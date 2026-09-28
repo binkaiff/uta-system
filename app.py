@@ -13,6 +13,9 @@ from io import BytesIO
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'change-this-secret-key-in-production')
@@ -165,6 +168,46 @@ def load_users():
 
 USERS = load_users()
 
+# Candidate Management System access
+CANDIDATE_USERS = {'kaiff', 'firnas', 'thanzeel'}
+CANDIDATE_PASSWORD = os.getenv('CANDIDATE_PASSWORD', '').strip()
+
+CANDIDATE_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'candidate_data')
+CANDIDATE_INVOICES_FILE = os.path.join(CANDIDATE_DATA_DIR, 'invoices.json')
+
+def load_candidate_invoices():
+    os.makedirs(CANDIDATE_DATA_DIR, exist_ok=True)
+    if not os.path.exists(CANDIDATE_INVOICES_FILE):
+        return []
+    try:
+        with open(CANDIDATE_INVOICES_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+def save_candidate_invoices(invoices):
+    os.makedirs(CANDIDATE_DATA_DIR, exist_ok=True)
+    temp_file = CANDIDATE_INVOICES_FILE + '.tmp'
+    with open(temp_file, 'w', encoding='utf-8') as f:
+        json.dump(invoices, f, indent=2, ensure_ascii=False)
+    os.replace(temp_file, CANDIDATE_INVOICES_FILE)
+
+def next_candidate_invoice_number():
+    year = datetime.now().year
+    prefix = f"INV-{year}-"
+    max_no = 0
+    for invoice in load_candidate_invoices():
+        number = str(invoice.get('invoiceNo', ''))
+        if number.startswith(prefix):
+            try:
+                max_no = max(max_no, int(number.rsplit('-', 1)[1]))
+            except Exception:
+                pass
+    return f"{prefix}{max_no + 1:03d}"
+
+
+
 # Display information for the two authorised UTA account users.
 # The image files should remain in /static as thanzeel.png and kaiff.png.
 USER_PROFILES = {
@@ -182,21 +225,42 @@ USER_PROFILES = {
 
 @app.context_processor
 def inject_current_user_profile():
-    """Make the signed-in user's display profile available to every template."""
+    """Make the signed-in user's display profile and active system available to every template."""
     username = str(session.get('user', '')).lower()
     profile = USER_PROFILES.get(username, {
         'name': username.title() if username else 'User',
-        'role': 'Administrator',
+        'role': 'Candidate Staff' if session.get('system') == 'candidate' else 'Administrator',
         'photo': 'logo.png',
     })
-    return {'current_user_profile': profile}
+    if session.get('system') == 'candidate' and username == 'firnas':
+        profile = {'name': 'Firnas', 'role': 'Candidate Staff', 'photo': 'logo.png'}
+    elif session.get('system') == 'candidate' and username in profile:
+        pass
+    if session.get('system') == 'candidate' and username in USER_PROFILES:
+        profile = dict(USER_PROFILES[username])
+        profile['role'] = 'Candidate Staff'
+    return {
+        'current_user_profile': profile,
+        'current_system': session.get('system', 'accounts')
+    }
 
 def login_required(f):
+    """Protect Accounts System routes."""
     @wraps(f)
     def wrapper(*args, **kwargs):
-        if not session.get('user'):
+        if not session.get('user') or session.get('system') != 'accounts':
             if request.path.startswith('/get_') or request.method != 'GET':
                 return jsonify({'success': False, 'message': 'Unauthorized. Please login again.'}), 401
+            return redirect(url_for('login_page'))
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def candidate_login_required(f):
+    """Protect Candidate Management System routes."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get('user') or session.get('system') != 'candidate':
             return redirect(url_for('login_page'))
         return f(*args, **kwargs)
     return wrapper
@@ -473,11 +537,15 @@ def get_current_balance(month_name):
 def index():
     if not session.get('user'):
         return redirect(url_for('login_page'))
+    if session.get('system') == 'candidate':
+        return redirect(url_for('candidate_dashboard'))
     return redirect(url_for('dashboard'))
 
 @app.route('/login', methods=['GET'])
 def login_page():
     if session.get('user'):
+        if session.get('system') == 'candidate':
+            return redirect(url_for('candidate_dashboard'))
         return redirect(url_for('dashboard'))
     return render_template('login.html')
 
@@ -486,19 +554,152 @@ def login():
     data = request.get_json(silent=True) or {}
     username = str(data.get('username', '')).strip().lower()
     password = str(data.get('password', ''))
+    selected_system = str(data.get('system', 'accounts')).strip().lower()
+
+    if selected_system == 'candidate':
+        if not CANDIDATE_PASSWORD:
+            return jsonify({
+                'success': False,
+                'message': 'Candidate password is not configured on the server.'
+            }), 503
+        if username in CANDIDATE_USERS and hmac.compare_digest(password, CANDIDATE_PASSWORD):
+            session.clear()
+            session.permanent = False
+            session['user'] = username
+            session['system'] = 'candidate'
+            session['login_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            return jsonify({
+                'success': True,
+                'message': 'Login successful',
+                'redirect': url_for('candidate_dashboard')
+            })
+        return jsonify({'success': False, 'message': 'Invalid username or password'}), 401
+
     stored_hash = USERS.get(username)
     if stored_hash and hmac.compare_digest(stored_hash, hash_password(password)):
         session.clear()
         session.permanent = False
         session['user'] = username
+        session['system'] = 'accounts'
         session['login_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        return jsonify({'success': True, 'message': 'Login successful'})
+        return jsonify({
+            'success': True,
+            'message': 'Login successful',
+            'redirect': url_for('dashboard')
+        })
     return jsonify({'success': False, 'message': 'Invalid username or password'}), 401
 
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('login_page'))
+
+@app.route('/candidate/dashboard')
+@candidate_login_required
+def candidate_dashboard():
+    return render_template(
+        'candidate/dashboard.html',
+        current_user=session.get('user'),
+        current_date=datetime.now().strftime('%A, %d %B %Y')
+    )
+
+@app.route('/candidate/registration')
+@candidate_login_required
+def candidate_registration():
+    return render_template(
+        'candidate/registration.html',
+        current_user=session.get('user'),
+        current_date=datetime.now().strftime('%A, %d %B %Y')
+    )
+
+@app.route('/candidate/invoice')
+@candidate_login_required
+def candidate_invoice():
+    return render_template(
+        'candidate/invoice.html',
+        current_user=session.get('user'),
+        current_date=datetime.now().strftime('%A, %d %B %Y')
+    )
+
+
+@app.route('/api/candidate/invoices', methods=['GET'])
+@candidate_login_required
+def candidate_invoices_api():
+    invoices = load_candidate_invoices()
+    invoices.sort(key=lambda x: str(x.get('createdAt', '')), reverse=True)
+    return jsonify({'success': True, 'invoices': invoices})
+
+@app.route('/api/candidate/invoices/next-number', methods=['GET'])
+@candidate_login_required
+def candidate_invoice_next_number_api():
+    return jsonify({'success': True, 'invoiceNo': next_candidate_invoice_number()})
+
+@app.route('/api/candidate/invoices', methods=['POST'])
+@candidate_login_required
+def candidate_invoice_create_api():
+    data = request.get_json(silent=True) or {}
+    client_name = str(data.get('clientName', '')).strip()
+    if not client_name:
+        return jsonify({'success': False, 'message': 'Client name is required.'}), 400
+
+    items = data.get('items', [])
+    if not isinstance(items, list):
+        return jsonify({'success': False, 'message': 'Invalid invoice items.'}), 400
+
+    clean_items = []
+    subtotal = 0.0
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        description = str(item.get('description', '')).strip()
+        try:
+            quantity = float(item.get('quantity', 0) or 0)
+            price = float(item.get('price', 0) or 0)
+        except (TypeError, ValueError):
+            quantity = 0.0
+            price = 0.0
+        total = quantity * price
+        clean_items.append({
+            'description': description,
+            'quantity': quantity,
+            'price': price,
+            'total': total
+        })
+        subtotal += total
+
+    invoices = load_candidate_invoices()
+    invoice_id = int(datetime.now().timestamp() * 1000)
+    invoice_no = str(data.get('invoiceNo', '')).strip() or next_candidate_invoice_number()
+    if any(str(inv.get('invoiceNo', '')).strip().lower() == invoice_no.lower() for inv in invoices):
+        invoice_no = next_candidate_invoice_number()
+
+    invoice = {
+        'id': invoice_id,
+        'invoiceNo': invoice_no,
+        'date': str(data.get('date', '')).strip() or datetime.now().strftime('%Y-%m-%d'),
+        'clientName': client_name,
+        'passportNo': str(data.get('passportNo', '')).strip(),
+        'destination': str(data.get('destination', '')).strip(),
+        'items': clean_items,
+        'subtotal': subtotal,
+        'vat': 0,
+        'grandTotal': subtotal,
+        'createdAt': datetime.now().isoformat(timespec='seconds'),
+        'createdBy': session.get('user')
+    }
+    invoices.append(invoice)
+    save_candidate_invoices(invoices)
+    return jsonify({'success': True, 'message': 'Invoice saved successfully.', 'invoice': invoice})
+
+@app.route('/api/candidate/invoices/<int:invoice_id>', methods=['DELETE'])
+@candidate_login_required
+def candidate_invoice_delete_api(invoice_id):
+    invoices = load_candidate_invoices()
+    new_invoices = [inv for inv in invoices if int(inv.get('id', 0) or 0) != invoice_id]
+    if len(new_invoices) == len(invoices):
+        return jsonify({'success': False, 'message': 'Invoice not found.'}), 404
+    save_candidate_invoices(new_invoices)
+    return jsonify({'success': True, 'message': 'Invoice deleted successfully.'})
 
 @app.route('/dashboard')
 @login_required

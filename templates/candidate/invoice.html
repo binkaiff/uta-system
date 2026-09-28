@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Invoice Management - UTA Candidate Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"><link rel="stylesheet" href="{{ url_for('static', filename='candidate_invoice.css') }}"></head>
+<body><div class="dashboard-container"><aside class="sidebar"><div class="logo"><div class="logo-icon"><img src="{{ url_for('static', filename='logo.png') }}" alt="UTA Logo"></div><h2>UTA</h2><p>Manpower Service</p><span class="license-badge">SLBFE Licensed</span></div><nav class="nav-menu"><a href="{{ url_for('candidate_dashboard') }}" class="nav-item"><i class="fas fa-chart-line"></i><span>Dashboard</span></a><a href="{{ url_for('candidate_registration') }}" class="nav-item"><i class="fas fa-user-plus"></i><span>Registration</span></a><a href="{{ url_for('candidate_invoice') }}" class="nav-item active"><i class="fas fa-file-invoice"></i><span>Invoice</span></a><a href="{{ url_for('logout') }}" class="nav-item"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a></nav></aside>
+<main class="main-content"><header class="header"><div class="header-title"><h1>Invoice Management</h1><p>Create, preview, print and save candidate invoices.</p></div><div class="header-actions"><div class="date-display"><i class="fas fa-calendar-alt"></i><span>{{ current_date }}</span></div><div class="candidate-system-badge"><i class="fas fa-users"></i> Candidate System</div></div></header>
+
+<div class="invoice-app">
+    <div class="form-section">
+        <div class="form-header"><i class="fas fa-file-invoice"></i><h2>Create New Invoice</h2></div>
+        <div class="form-grid">
+            <div class="form-group"><label><i class="fas fa-hashtag"></i> Invoice No.</label><input type="text" id="invNumber" class="form-control" readonly></div>
+            <div class="form-group"><label><i class="fas fa-calendar"></i> Date</label><input type="date" id="invDate" class="form-control"></div>
+            <div class="form-group"><label><i class="fas fa-user"></i> Client Name</label><input type="text" id="clientName" class="form-control" placeholder="Enter client name"></div>
+            <div class="form-group"><label><i class="fas fa-passport"></i> Passport No.</label><input type="text" id="passportNo" class="form-control" placeholder="Passport number"></div>
+            <div class="form-group"><label><i class="fas fa-flag-checkered"></i> Destination</label><input type="text" id="destination" class="form-control" placeholder="Country"></div>
+        </div>
+        <div class="items-section">
+            <h4><i class="fas fa-list"></i> Invoice Items</h4>
+            <div class="table-responsive"><table class="items-table"><thead><tr><th>Description</th><th>Quantity</th><th>Unit Price (LKR)</th><th>Total (LKR)</th><th></th></tr></thead><tbody id="itemsBody"></tbody></table></div>
+            <button class="add-item-btn" onclick="addItem()"><i class="fas fa-plus"></i> Add Item</button>
+        </div>
+        <div class="totals-section"><div class="totals-row"><div class="total-box"><label>Subtotal</label><div class="total-amount" id="subtotal">LKR 0</div></div><div class="total-box"><label>VAT (0%)</label><div class="total-amount" id="vat">LKR 0</div></div><div class="total-box grand"><label>Grand Total</label><div class="total-amount" id="grandTotal">LKR 0</div></div></div></div>
+        <div class="form-actions"><button class="btn-secondary" onclick="resetForm()"><i class="fas fa-undo"></i> Reset</button><button class="btn-primary" onclick="previewInvoice()"><i class="fas fa-eye"></i> Preview</button><button class="btn-primary" onclick="saveInvoice()"><i class="fas fa-save"></i> Save</button></div>
+    </div>
+    <div class="a4-preview"><div class="a4-header"><i class="fas fa-print"></i> A4 Invoice Preview <button class="print-btn" onclick="printInvoice()"><i class="fas fa-print"></i> Print</button></div><div id="a4Content" class="a4-invoice"></div></div>
+    <div class="saved-invoices"><div class="saved-header"><h3><i class="fas fa-history"></i> Recent Invoices</h3><button class="refresh-btn" onclick="loadInvoices()"><i class="fas fa-sync-alt"></i></button></div><div id="invoicesList" class="invoices-list"></div></div>
+</div>
+</main></div><script src="{{ url_for('static', filename='candidate_invoice.js') }}"></script></body></html>
