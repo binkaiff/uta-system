@@ -1,48 +1,147 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<title>Candidate Registration - UTA Candidate Management</title>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Candidate Registration - UTA Candidate Management</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-<style>
-.candidate-system-badge{display:inline-flex;align-items:center;gap:7px;background:#fff1f3;color:#b4233d;border:1px solid #ffd4dc;border-radius:999px;padding:7px 12px;font-size:12px;font-weight:700}
-.candidate-welcome{background:white;border:1px solid #eef2f6;border-radius:18px;padding:28px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
-.candidate-welcome h3{color:#1a1a2e;margin-bottom:8px}
-.candidate-welcome p{color:#667085;line-height:1.6}
-.candidate-next-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:20px}
-.candidate-next-card{background:#fff;border:1px solid #eef2f6;border-radius:16px;padding:20px}
-.candidate-next-card i{color:#DC143C;font-size:23px;margin-bottom:12px}
-.candidate-next-card h4{color:#1a1a2e;margin-bottom:7px}
-.candidate-next-card p{color:#667085;font-size:13px;line-height:1.5}
-@media(max-width:900px){.candidate-next-grid{grid-template-columns:1fr}}
-</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='candidate_management.css') }}">
+
 </head>
 <body>
 <div class="dashboard-container">
 
-        <aside class="sidebar">
-            <div class="logo">
-                <div class="logo-icon"><img src="{{ url_for('static', filename='logo.png') }}" alt="UTA Logo"></div>
-                <h2>UTA</h2><p>Manpower Service</p><span class="license-badge">SLBFE Licensed</span>
-            </div>
-            <nav class="nav-menu">
-                <a href="{{ url_for('candidate_dashboard') }}" class="nav-item {{ 'active' if 'registration' == 'dashboard' else '' }}"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
-                <a href="{{ url_for('candidate_registration') }}" class="nav-item {{ 'active' if 'registration' == 'registration' else '' }}"><i class="fas fa-user-plus"></i><span>Registration</span></a>
-                <a href="{{ url_for('candidate_invoice') }}" class="nav-item {{ 'active' if 'registration' == 'invoice' else '' }}"><i class="fas fa-file-invoice"></i><span>Invoice</span></a>
-                <a href="{{ url_for('logout') }}" class="nav-item"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
-            </nav>
-        </aside>
-
+    <aside class="sidebar">
+        <div class="logo">
+            <div class="logo-icon"><img src="{{ url_for('static', filename='logo.png') }}" alt="UTA Logo"></div>
+            <h2>UTA</h2>
+            <p>Manpower Service</p>
+            <span class="license-badge">SLBFE Licensed</span>
+        </div>
+        <nav class="nav-menu">
+            <a href="{{ url_for('candidate_dashboard') }}" class="nav-item"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+<a href="{{ url_for('candidate_registration') }}" class="nav-item active"><i class="fas fa-user-plus"></i><span>Registration</span></a>
+<a href="{{ url_for('candidate_records') }}" class="nav-item"><i class="fas fa-users"></i><span>Candidates</span></a>
+<a href="{{ url_for('candidate_invoice') }}" class="nav-item"><i class="fas fa-file-invoice"></i><span>Invoice</span></a>
+            <a href="{{ url_for('logout') }}" class="nav-item"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+        </nav>
+    </aside>
+    
 <main class="main-content">
-<header class="header">
-<div class="header-title"><h1>Candidate Registration</h1><p>Add and manage candidate information.</p></div>
-<div class="header-actions"><div class="date-display"><i class="fas fa-calendar-alt"></i><span>{{ current_date }}</span></div><div class="candidate-system-badge"><i class="fas fa-users"></i> Candidate System</div></div>
-</header>
-<div class="candidate-welcome"><h3>Registration</h3><p>The route is ready and protected. In Step 2 we will place the complete registration form from your Candidate Management System example here and save candidates on the PythonAnywhere server.</p></div>
+    <header class="header">
+        <div class="header-title">
+            <h1>Candidate Registration</h1>
+            <p>Add a new candidate to the UTA Candidate Management System.</p>
+        </div>
+        <div class="header-actions">
+            <div class="date-display"><i class="fas fa-calendar-alt"></i><span>{{ current_date }}</span></div>
+            <div class="candidate-system-badge"><i class="fas fa-users"></i> Candidate System</div>
+        </div>
+    </header>
+
+    <section class="candidate-form-card">
+        <div class="candidate-form-heading">
+            <div>
+                <span class="section-kicker">NEW CANDIDATE</span>
+                <h2><i class="fas fa-user-plus"></i> Candidate Information</h2>
+            </div>
+            <div class="candidate-id-chip">
+                <span>Candidate ID</span>
+                <strong id="candidateIdPreview">Loading...</strong>
+            </div>
+        </div>
+
+        <form id="candidateForm" autocomplete="off">
+            <div class="candidate-form-grid">
+                <div class="candidate-field">
+                    <label for="fullName">Full Name <span class="required">*</span></label>
+                    <input id="fullName" type="text" placeholder="Enter full name" required>
+                </div>
+                <div class="candidate-field">
+                    <label for="passportNo">Passport No <span class="required">*</span></label>
+                    <input id="passportNo" type="text" placeholder="Enter passport number" required>
+                </div>
+                <div class="candidate-field">
+                    <label for="nic">NIC</label>
+                    <input id="nic" type="text" placeholder="Enter NIC">
+                </div>
+                <div class="candidate-field">
+                    <label for="phoneNumber">Phone Number</label>
+                    <input id="phoneNumber" type="tel" placeholder="Enter phone number">
+                </div>
+                <div class="candidate-field">
+                    <label for="dateOfBirth">Date of Birth</label>
+                    <input id="dateOfBirth" type="date">
+                </div>
+                <div class="candidate-field candidate-field-wide">
+                    <label for="address">Address</label>
+                    <input id="address" type="text" placeholder="Enter address">
+                </div>
+                <div class="candidate-field">
+                    <label for="jobCategory">Job Category</label>
+                    <input id="jobCategory" type="text" placeholder="e.g. Electrician">
+                </div>
+                <div class="candidate-field">
+                    <label for="country">Country</label>
+                    <input id="country" type="text" placeholder="e.g. UAE">
+                </div>
+                <div class="candidate-field">
+                    <label for="agent">Agent</label>
+                    <input id="agent" type="text" placeholder="Enter agent name">
+                </div>
+                <div class="candidate-field">
+                    <label for="medicalStatus">Medical Status</label>
+                    <select id="medicalStatus">
+                        <option value="Pending">Pending</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Completed">Completed</option>
+                        <option value="Not Required">Not Required</option>
+                    </select>
+                </div>
+                <div class="candidate-field">
+                    <label for="visaStatus">Visa Status</label>
+                    <select id="visaStatus">
+                        <option value="Pending">Pending</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Completed">Completed</option>
+                        <option value="Not Required">Not Required</option>
+                    </select>
+                </div>
+                <div class="candidate-field">
+                    <label for="interviewStatus">Interview Status</label>
+                    <select id="interviewStatus">
+                        <option value="Pending">Pending</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Completed">Completed</option>
+                        <option value="Not Required">Not Required</option>
+                    </select>
+                </div>
+                <div class="candidate-field candidate-field-full">
+                    <label for="notes">Notes</label>
+                    <textarea id="notes" rows="4" placeholder="Add notes about this candidate"></textarea>
+                </div>
+            </div>
+
+            <div class="candidate-form-actions">
+                <button type="button" class="candidate-btn secondary" id="clearCandidateBtn">
+                    <i class="fas fa-eraser"></i> Clear Form
+                </button>
+                <a href="{{ url_for('candidate_records') }}" class="candidate-btn outline">
+                    <i class="fas fa-list"></i> View Candidates
+                </a>
+                <button type="submit" class="candidate-btn primary" id="saveCandidateBtn">
+                    <i class="fas fa-save"></i> Save Candidate
+                </button>
+            </div>
+        </form>
+    </section>
+
+    <div id="candidateToast" class="candidate-toast" aria-live="polite"></div>
 </main>
 </div>
+<script src="{{ url_for('static', filename='candidate_registration.js') }}"></script>
 </body>
 </html>

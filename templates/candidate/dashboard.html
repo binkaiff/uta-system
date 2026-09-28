@@ -1,47 +1,115 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<title>Candidate Dashboard - UTA Candidate Management</title>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Candidate Dashboard - UTA Candidate Management</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-<style>
-.candidate-system-badge{display:inline-flex;align-items:center;gap:7px;background:#fff1f3;color:#b4233d;border:1px solid #ffd4dc;border-radius:999px;padding:7px 12px;font-size:12px;font-weight:700}
-.candidate-welcome{background:white;border:1px solid #eef2f6;border-radius:18px;padding:28px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
-.candidate-welcome h3{color:#1a1a2e;margin-bottom:8px}
-.candidate-welcome p{color:#667085;line-height:1.6}
-.candidate-next-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:20px}
-.candidate-next-card{background:#fff;border:1px solid #eef2f6;border-radius:16px;padding:20px}
-.candidate-next-card i{color:#DC143C;font-size:23px;margin-bottom:12px}
-.candidate-next-card h4{color:#1a1a2e;margin-bottom:7px}
-.candidate-next-card p{color:#667085;font-size:13px;line-height:1.5}
-@media(max-width:900px){.candidate-next-grid{grid-template-columns:1fr}}
-</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='candidate_management.css') }}">
+
 </head>
 <body>
 <div class="dashboard-container">
 
-        <aside class="sidebar">
-            <div class="logo">
-                <div class="logo-icon"><img src="{{ url_for('static', filename='logo.png') }}" alt="UTA Logo"></div>
-                <h2>UTA</h2><p>Manpower Service</p><span class="license-badge">SLBFE Licensed</span>
-            </div>
-            <nav class="nav-menu">
-                <a href="{{ url_for('candidate_dashboard') }}" class="nav-item {{ 'active' if 'dashboard' == 'dashboard' else '' }}"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
-                <a href="{{ url_for('candidate_registration') }}" class="nav-item {{ 'active' if 'dashboard' == 'registration' else '' }}"><i class="fas fa-user-plus"></i><span>Registration</span></a>
-                <a href="{{ url_for('candidate_invoice') }}" class="nav-item {{ 'active' if 'dashboard' == 'invoice' else '' }}"><i class="fas fa-file-invoice"></i><span>Invoice</span></a>
-                <a href="{{ url_for('logout') }}" class="nav-item"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
-            </nav>
-        </aside>
-
+    <aside class="sidebar">
+        <div class="logo">
+            <div class="logo-icon"><img src="{{ url_for('static', filename='logo.png') }}" alt="UTA Logo"></div>
+            <h2>UTA</h2>
+            <p>Manpower Service</p>
+            <span class="license-badge">SLBFE Licensed</span>
+        </div>
+        <nav class="nav-menu">
+            <a href="{{ url_for('candidate_dashboard') }}" class="nav-item active"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+<a href="{{ url_for('candidate_registration') }}" class="nav-item"><i class="fas fa-user-plus"></i><span>Registration</span></a>
+<a href="{{ url_for('candidate_records') }}" class="nav-item"><i class="fas fa-users"></i><span>Candidates</span></a>
+<a href="{{ url_for('candidate_invoice') }}" class="nav-item"><i class="fas fa-file-invoice"></i><span>Invoice</span></a>
+            <a href="{{ url_for('logout') }}" class="nav-item"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+        </nav>
+    </aside>
+    
 <main class="main-content">
-<header class="header">
-<div class="header-title"><h1>Candidate Dashboard</h1><p>Manage candidate operations from one place.</p></div>
-<div class="header-actions"><div class="date-display"><i class="fas fa-calendar-alt"></i><span>{{ current_date }}</span></div><div class="candidate-system-badge"><i class="fas fa-users"></i> Candidate System</div></div>
-</header>
-<div class="candidate-welcome"><h3>Welcome, {{ current_user_profile.name }}</h3><p>Candidate Management System is now connected to the main UTA login. This is Step 1. Registration and Invoice routes are protected separately from the Accounts System.</p></div><div class="candidate-next-grid"><div class="candidate-next-card"><i class="fas fa-user-plus"></i><h4>Registration</h4><p>Next we will move the candidate registration workflow from your example project into Flask/server storage.</p></div><div class="candidate-next-card"><i class="fas fa-users"></i><h4>Candidate Records</h4><p>Candidate list, search and profile management will be added after registration is complete.</p></div><div class="candidate-next-card"><i class="fas fa-file-invoice-dollar"></i><h4>Invoices</h4><p>Your example invoice create, preview and print workflow will be integrated after registration.</p></div></div>
+    <header class="header">
+        <div class="header-title">
+            <h1>Candidate Dashboard</h1>
+            <p>Manage candidate operations from one place.</p>
+        </div>
+        <div class="header-actions">
+            <div class="date-display"><i class="fas fa-calendar-alt"></i><span>{{ current_date }}</span></div>
+            <div class="candidate-system-badge"><i class="fas fa-users"></i> Candidate System</div>
+        </div>
+    </header>
+
+    <section class="candidate-dashboard-hero">
+        <div>
+            <span class="section-kicker">UTA CANDIDATE MANAGEMENT</span>
+            <h2>Welcome, {{ current_user_profile.name }}</h2>
+            <p>Register candidates, track processing status and manage invoices from one secure workspace.</p>
+        </div>
+        <a href="{{ url_for('candidate_registration') }}" class="candidate-btn primary">
+            <i class="fas fa-user-plus"></i> Register Candidate
+        </a>
+    </section>
+
+    <section class="candidate-stats-grid">
+        <div class="candidate-stat-card">
+            <div class="candidate-stat-icon red"><i class="fas fa-users"></i></div>
+            <div><span>Total Candidates</span><strong>{{ stats.total }}</strong></div>
+        </div>
+        <div class="candidate-stat-card">
+            <div class="candidate-stat-icon green"><i class="fas fa-notes-medical"></i></div>
+            <div><span>Medical Completed</span><strong>{{ stats.medical_completed }}</strong></div>
+        </div>
+        <div class="candidate-stat-card">
+            <div class="candidate-stat-icon blue"><i class="fas fa-passport"></i></div>
+            <div><span>Visa Completed</span><strong>{{ stats.visa_completed }}</strong></div>
+        </div>
+        <div class="candidate-stat-card">
+            <div class="candidate-stat-icon orange"><i class="fas fa-handshake"></i></div>
+            <div><span>Interview Completed</span><strong>{{ stats.interview_completed }}</strong></div>
+        </div>
+    </section>
+
+    <section class="candidate-dashboard-grid">
+        <div class="candidate-records-card">
+            <div class="candidate-records-header">
+                <div><h2><i class="fas fa-clock"></i> Recent Candidates</h2><p>Latest updated records</p></div>
+                <a href="{{ url_for('candidate_records') }}" class="candidate-text-link">View all <i class="fas fa-arrow-right"></i></a>
+            </div>
+            <div class="recent-candidate-list">
+                {% if recent_candidates %}
+                    {% for candidate in recent_candidates %}
+                    <a href="{{ url_for('candidate_records') }}?open={{ candidate.candidateId }}" class="recent-candidate-row">
+                        <div class="recent-candidate-avatar">{{ candidate.fullName[:1]|upper }}</div>
+                        <div class="recent-candidate-info">
+                            <strong>{{ candidate.fullName }}</strong>
+                            <span>{{ candidate.candidateId }} · {{ candidate.passportNo }}</span>
+                        </div>
+                        <div class="recent-candidate-route">
+                            <span>{{ candidate.jobCategory or 'No job category' }}</span>
+                            <small>{{ candidate.country or 'No country' }}</small>
+                        </div>
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                    {% endfor %}
+                {% else %}
+                    <div class="candidate-empty-mini">
+                        <i class="fas fa-user-plus"></i>
+                        <p>No candidates registered yet.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="candidate-quick-card">
+            <h2><i class="fas fa-bolt"></i> Quick Actions</h2>
+            <a href="{{ url_for('candidate_registration') }}"><i class="fas fa-user-plus"></i><span>Register Candidate</span><i class="fas fa-arrow-right"></i></a>
+            <a href="{{ url_for('candidate_records') }}"><i class="fas fa-search"></i><span>Search Candidates</span><i class="fas fa-arrow-right"></i></a>
+            <a href="{{ url_for('candidate_invoice') }}"><i class="fas fa-file-invoice"></i><span>Create Invoice</span><i class="fas fa-arrow-right"></i></a>
+        </div>
+    </section>
 </main>
 </div>
 </body>

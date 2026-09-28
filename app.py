@@ -175,6 +175,48 @@ CANDIDATE_PASSWORD = os.getenv('CANDIDATE_PASSWORD', '').strip()
 CANDIDATE_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'candidate_data')
 CANDIDATE_INVOICES_FILE = os.path.join(CANDIDATE_DATA_DIR, 'invoices.json')
 
+CANDIDATE_RECORDS_FILE = os.path.join(CANDIDATE_DATA_DIR, 'candidates.json')
+
+def load_candidate_records():
+    os.makedirs(CANDIDATE_DATA_DIR, exist_ok=True)
+    if not os.path.exists(CANDIDATE_RECORDS_FILE):
+        return []
+    try:
+        with open(CANDIDATE_RECORDS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+def save_candidate_records(records):
+    os.makedirs(CANDIDATE_DATA_DIR, exist_ok=True)
+    temp_file = CANDIDATE_RECORDS_FILE + '.tmp'
+    with open(temp_file, 'w', encoding='utf-8') as f:
+        json.dump(records, f, indent=2, ensure_ascii=False)
+    os.replace(temp_file, CANDIDATE_RECORDS_FILE)
+
+def next_candidate_id():
+    year = datetime.now().year
+    prefix = f"UTA-CAN-{year}-"
+    max_no = 0
+    for candidate in load_candidate_records():
+        candidate_id = str(candidate.get('candidateId', ''))
+        if candidate_id.startswith(prefix):
+            try:
+                max_no = max(max_no, int(candidate_id.rsplit('-', 1)[1]))
+            except Exception:
+                pass
+    return f"{prefix}{max_no + 1:03d}"
+
+def normalize_candidate_payload(data):
+    fields = [
+        'fullName', 'passportNo', 'nic', 'phoneNumber', 'dateOfBirth',
+        'address', 'jobCategory', 'country', 'agent',
+        'medicalStatus', 'visaStatus', 'interviewStatus', 'notes'
+    ]
+    return {field: str(data.get(field, '') or '').strip() for field in fields}
+
+
 def load_candidate_invoices():
     os.makedirs(CANDIDATE_DATA_DIR, exist_ok=True)
     if not os.path.exists(CANDIDATE_INVOICES_FILE):
@@ -261,6 +303,8 @@ def candidate_login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         if not session.get('user') or session.get('system') != 'candidate':
+            if request.path.startswith('/api/'):
+                return jsonify({'success': False, 'message': 'Unauthorized. Please login again.'}), 401
             return redirect(url_for('login_page'))
         return f(*args, **kwargs)
     return wrapper
@@ -597,10 +641,24 @@ def logout():
 @app.route('/candidate/dashboard')
 @candidate_login_required
 def candidate_dashboard():
+    candidates = load_candidate_records()
+    stats = {
+        'total': len(candidates),
+        'medical_completed': sum(1 for c in candidates if c.get('medicalStatus') == 'Completed'),
+        'visa_completed': sum(1 for c in candidates if c.get('visaStatus') == 'Completed'),
+        'interview_completed': sum(1 for c in candidates if c.get('interviewStatus') == 'Completed'),
+    }
+    recent_candidates = sorted(
+        candidates,
+        key=lambda c: str(c.get('updatedAt') or c.get('createdAt') or ''),
+        reverse=True
+    )[:5]
     return render_template(
         'candidate/dashboard.html',
         current_user=session.get('user'),
-        current_date=datetime.now().strftime('%A, %d %B %Y')
+        current_date=datetime.now().strftime('%A, %d %B %Y'),
+        stats=stats,
+        recent_candidates=recent_candidates
     )
 
 @app.route('/candidate/registration')
@@ -608,6 +666,16 @@ def candidate_dashboard():
 def candidate_registration():
     return render_template(
         'candidate/registration.html',
+        current_user=session.get('user'),
+        current_date=datetime.now().strftime('%A, %d %B %Y')
+    )
+
+
+@app.route('/candidate/records')
+@candidate_login_required
+def candidate_records():
+    return render_template(
+        'candidate/records.html',
         current_user=session.get('user'),
         current_date=datetime.now().strftime('%A, %d %B %Y')
     )
@@ -620,6 +688,109 @@ def candidate_invoice():
         current_user=session.get('user'),
         current_date=datetime.now().strftime('%A, %d %B %Y')
     )
+
+
+
+@app.route('/api/candidate/candidates', methods=['GET'])
+@candidate_login_required
+def candidate_records_api():
+    candidates = load_candidate_records()
+    candidates.sort(
+        key=lambda c: str(c.get('updatedAt') or c.get('createdAt') or ''),
+        reverse=True
+    )
+    return jsonify({'success': True, 'candidates': candidates})
+
+
+@app.route('/api/candidate/candidates/next-id', methods=['GET'])
+@candidate_login_required
+def candidate_next_id_api():
+    return jsonify({'success': True, 'candidateId': next_candidate_id()})
+
+
+@app.route('/api/candidate/candidates', methods=['POST'])
+@candidate_login_required
+def candidate_create_api():
+    data = request.get_json(silent=True) or {}
+    candidate = normalize_candidate_payload(data)
+
+    if not candidate['fullName']:
+        return jsonify({'success': False, 'message': 'Full Name is required.'}), 400
+    if not candidate['passportNo']:
+        return jsonify({'success': False, 'message': 'Passport No is required.'}), 400
+
+    candidates = load_candidate_records()
+    passport_key = candidate['passportNo'].lower()
+    if any(str(c.get('passportNo', '')).strip().lower() == passport_key for c in candidates):
+        return jsonify({'success': False, 'message': 'A candidate with this Passport No already exists.'}), 409
+
+    now = datetime.now().isoformat(timespec='seconds')
+    candidate.update({
+        'candidateId': next_candidate_id(),
+        'createdAt': now,
+        'updatedAt': now,
+        'createdBy': session.get('user'),
+        'updatedBy': session.get('user'),
+    })
+    candidates.append(candidate)
+    save_candidate_records(candidates)
+    return jsonify({'success': True, 'message': 'Candidate registered successfully.', 'candidate': candidate})
+
+
+@app.route('/api/candidate/candidates/<candidate_id>', methods=['GET'])
+@candidate_login_required
+def candidate_get_api(candidate_id):
+    candidate = next(
+        (c for c in load_candidate_records() if str(c.get('candidateId')) == candidate_id),
+        None
+    )
+    if not candidate:
+        return jsonify({'success': False, 'message': 'Candidate not found.'}), 404
+    return jsonify({'success': True, 'candidate': candidate})
+
+
+@app.route('/api/candidate/candidates/<candidate_id>', methods=['PUT'])
+@candidate_login_required
+def candidate_update_api(candidate_id):
+    data = request.get_json(silent=True) or {}
+    incoming = normalize_candidate_payload(data)
+
+    if not incoming['fullName']:
+        return jsonify({'success': False, 'message': 'Full Name is required.'}), 400
+    if not incoming['passportNo']:
+        return jsonify({'success': False, 'message': 'Passport No is required.'}), 400
+
+    candidates = load_candidate_records()
+    index = next((i for i, c in enumerate(candidates) if str(c.get('candidateId')) == candidate_id), None)
+    if index is None:
+        return jsonify({'success': False, 'message': 'Candidate not found.'}), 404
+
+    passport_key = incoming['passportNo'].lower()
+    if any(
+        i != index and str(c.get('passportNo', '')).strip().lower() == passport_key
+        for i, c in enumerate(candidates)
+    ):
+        return jsonify({'success': False, 'message': 'Another candidate already uses this Passport No.'}), 409
+
+    existing = candidates[index]
+    existing.update(incoming)
+    existing['updatedAt'] = datetime.now().isoformat(timespec='seconds')
+    existing['updatedBy'] = session.get('user')
+    candidates[index] = existing
+    save_candidate_records(candidates)
+
+    return jsonify({'success': True, 'message': 'Candidate updated successfully.', 'candidate': existing})
+
+
+@app.route('/api/candidate/candidates/<candidate_id>', methods=['DELETE'])
+@candidate_login_required
+def candidate_delete_api(candidate_id):
+    candidates = load_candidate_records()
+    new_candidates = [c for c in candidates if str(c.get('candidateId')) != candidate_id]
+    if len(new_candidates) == len(candidates):
+        return jsonify({'success': False, 'message': 'Candidate not found.'}), 404
+    save_candidate_records(new_candidates)
+    return jsonify({'success': True, 'message': 'Candidate deleted successfully.'})
 
 
 @app.route('/api/candidate/invoices', methods=['GET'])
