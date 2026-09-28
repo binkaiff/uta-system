@@ -451,7 +451,8 @@ body {
 }
 
 /* Buttons */
-.btn-create-month, .btn-end-month {
+.btn-create-month, 
+.btn-end-month {
     background: linear-gradient(135deg, #DC143C, #8B0000);
     color: white;
     border: none;
@@ -464,15 +465,15 @@ body {
     gap: 10px;
     transition: all 0.3s ease;
     font-size: 14px;
+    text-decoration: none !important;
 }
 
-.btn-end-month {
-    background: linear-gradient(135deg, #6c757d, #5a6268);
-}
-
-.btn-create-month:hover, .btn-end-month:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(220, 20, 60, 0.3);
+.btn-create-month:hover,
+.btn-create-month:focus,
+.btn-create-month:active,
+.btn-create-month:visited {
+    text-decoration: none !important;
+    color: white;
 }
 
 /* Months Grid */
@@ -4201,13 +4202,6 @@ button { font-family: inherit; }
 .cheque-pdf-link { display:inline-flex; align-items:center; gap:6px; padding:7px 10px; border-radius:8px; text-decoration:none; color:#c51639; background:#fff; border:1px solid #e0e4ea; font-size:12px; font-weight:650; }
 .cheque-pdf-link:hover { background:#f7f8fa; }
 
-.cheque-page .btn,
-.cheque-page .btn:link,
-.cheque-page .btn:visited,
-.cheque-page .btn:hover,
-.cheque-page .btn:active {
-    text-decoration: none !important;
-}
 
 @media (max-width: 1100px) {
     .cheque-workspace { grid-template-columns:1fr; }
