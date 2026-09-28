@@ -17,15 +17,21 @@ body {
 
 /* Sidebar */
 .sidebar {
-    width: 280px;
-    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
-    color: white;
-    padding: 0;
-    box-shadow: 2px 0 20px rgba(0,0,0,0.08);
-    position: fixed;
+    display: flex;
+    flex-direction: column;
     height: 100vh;
-    overflow-y: auto;
-    z-index: 100;
+}
+
+.nav-menu {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Logout is the last menu item */
+.nav-menu .nav-item:last-child {
+    margin-top: auto;
+    margin-bottom: 30px;
 }
 
 .logo {
