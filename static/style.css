@@ -17,21 +17,15 @@ body {
 
 /* Sidebar */
 .sidebar {
-    display: flex;
-    flex-direction: column;
+    width: 280px;
+    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+    color: white;
+    padding: 0;
+    box-shadow: 2px 0 20px rgba(0,0,0,0.08);
+    position: fixed;
     height: 100vh;
-}
-
-.nav-menu {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-}
-
-/* Logout is the last menu item */
-.nav-menu .nav-item:last-child {
-    margin-top: auto;
-    margin-bottom: 30px;
+    overflow-y: auto;
+    z-index: 100;
 }
 
 .logo {
@@ -4372,4 +4366,28 @@ button { font-family: inherit; }
 .btn-download:focus i,
 .btn-download:active i {
     color: #28a745 !important;
+}
+
+
+/* =========================================================
+   FINAL SIDEBAR LOGOUT POSITION UPDATE
+   Keep Logout pinned at the bottom of the sidebar
+   ========================================================= */
+
+.sidebar {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+.nav-menu {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Keep the final nav item (Logout) at the bottom */
+.nav-menu .nav-item:last-child {
+    margin-top: auto;
+    margin-bottom: 24px;
 }
