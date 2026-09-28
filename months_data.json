@@ -54,5 +54,12 @@
     "status": "closed",
     "filename": "excel_sheets/September_2027.xlsx",
     "closed_date": "2026-09-28 02:50:43"
+  },
+  "November_2027": {
+    "display_name": "November 2027",
+    "created_date": "2027-11-28 00:00:00",
+    "opening_balance": 100000.0,
+    "status": "active",
+    "filename": "excel_sheets/November_2027.xlsx"
   }
 }
