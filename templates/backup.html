@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UTA Manpower Service - Backup</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=5">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=7">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -15,6 +15,10 @@
             <nav class="nav-menu">
                 <a href="/dashboard" class="nav-item"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
                 <a href="/enter" class="nav-item"><i class="fas fa-plus-circle"></i><span>Enter Records</span></a>
+                <a href="/cheque-deposits" class="nav-item">
+                    <i class="fas fa-money-check-dollar"></i>
+                    <span>Cheque Deposits</span>
+                </a>
                 <a href="/view" class="nav-item"><i class="fas fa-table-list"></i><span>View Records</span></a>
                 <a href="/backup" class="nav-item active"><i class="fas fa-box-archive"></i><span>Backup</span></a>
                 <a href="/logout" class="nav-item logout-link" onclick="sessionStorage.removeItem('uta_logged_in')"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>

@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, jsonify, send_file, session, redirect, url_for
+from werkzeug.utils import secure_filename
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 import os
@@ -8,6 +9,10 @@ import json
 from functools import wraps
 import hashlib
 import hmac
+from io import BytesIO
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.utils import ImageReader
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'change-this-secret-key-in-production')
@@ -20,6 +25,124 @@ MONTHS_FILE = 'months_data.json'
 BACKUP_DIR = 'backups'
 DELETED_MONTHS_DIR = os.path.join(BACKUP_DIR, 'deleted_months')
 BACKUP_MONTHS_FILE = os.path.join(BACKUP_DIR, 'backup_months.json')
+CHEQUE_DEPOSITS_FILE = 'cheque_deposits.json'
+CHEQUE_UPLOAD_DIR = 'cheque_slips'
+CHEQUE_SECTION_MARKER = 'CHEQUE DEPOSITS'
+ALLOWED_CHEQUE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
+
+
+def load_cheque_deposits():
+    if os.path.exists(CHEQUE_DEPOSITS_FILE):
+        try:
+            with open(CHEQUE_DEPOSITS_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
+def save_cheque_deposits(data):
+    with open(CHEQUE_DEPOSITS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def get_month_cheque_deposits(month_name):
+    if not month_name:
+        return []
+    deposits = load_cheque_deposits()
+    rows = [item for item in deposits.values() if item.get('month') == month_name]
+    rows.sort(key=lambda x: (str(x.get('date', '')), str(x.get('time', '')), str(x.get('created_at', ''))))
+    return rows
+
+
+def next_cheque_deposit_id(month_name):
+    prefix = 'CHQ-' + datetime.now().strftime('%Y%m%d')
+    deposits = load_cheque_deposits()
+    used = []
+    for dep_id in deposits.keys():
+        if dep_id.startswith(prefix + '-'):
+            try:
+                used.append(int(dep_id.rsplit('-', 1)[1]))
+            except Exception:
+                pass
+    return f"{prefix}-{max(used, default=0) + 1:03d}"
+
+
+def cheque_file_allowed(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_CHEQUE_EXTENSIONS
+
+
+def find_cheque_section_row(ws):
+    for row_no in range(1, ws.max_row + 1):
+        if str(ws.cell(row_no, 1).value or '').strip().upper() == CHEQUE_SECTION_MARKER:
+            return row_no
+    return None
+
+
+def remove_cheque_section(ws):
+    marker_row = find_cheque_section_row(ws)
+    if marker_row:
+        ws.delete_rows(marker_row, ws.max_row - marker_row + 1)
+
+
+def sync_cheque_deposits_to_excel(month_name, include_all=False):
+    """Write cheque deposits below normal transactions in the SAME Records worksheet."""
+    filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
+    if not os.path.exists(filename):
+        return False
+
+    wb = load_workbook(filename)
+    if 'Cheque Deposits' in wb.sheetnames:
+        del wb['Cheque Deposits']
+    ws = wb['Records'] if 'Records' in wb.sheetnames else wb.active
+    remove_cheque_section(ws)
+
+    deposits = get_month_cheque_deposits(month_name)
+    if not include_all:
+        deposits = [d for d in deposits if d.get('excel_added')]
+
+    if deposits:
+        ws.append([None])
+        marker_row = ws.max_row + 1
+        ws.append([CHEQUE_SECTION_MARKER])
+        ws.merge_cells(start_row=marker_row, start_column=1, end_row=marker_row, end_column=6)
+        title_cell = ws.cell(marker_row, 1)
+        title_cell.fill = PatternFill(start_color='1A1A2E', end_color='1A1A2E', fill_type='solid')
+        title_cell.font = Font(bold=True, color='FFFFFF', size=12)
+        title_cell.alignment = Alignment(horizontal='left')
+
+        headers = ['No', 'Date', 'Time', 'Deposit ID', 'Amount', 'Notes']
+        ws.append(headers)
+        header_row = ws.max_row
+        header_fill = PatternFill(start_color='D7193F', end_color='D7193F', fill_type='solid')
+        for col in range(1, 7):
+            cell = ws.cell(header_row, col)
+            cell.fill = header_fill
+            cell.font = Font(bold=True, color='FFFFFF')
+            cell.alignment = Alignment(horizontal='center')
+
+        for idx, dep in enumerate(deposits, start=1):
+            ws.append([
+                idx,
+                dep.get('date', ''),
+                dep.get('time', ''),
+                dep.get('deposit_id', ''),
+                parse_amount(dep.get('amount', 0)),
+                dep.get('notes', '')
+            ])
+            ws.cell(ws.max_row, 5).number_format = '#,##0.00'
+
+        widths = {'A': 7, 'B': 14, 'C': 12, 'D': 26, 'E': 16, 'F': 42}
+        for col, width in widths.items():
+            current = ws.column_dimensions[col].width or 0
+            ws.column_dimensions[col].width = max(current, width)
+
+    wb.save(filename)
+    wb.close()
+    return True
+
 
 def hash_password(password):
     salt = os.getenv('PASSWORD_SALT', 'uta-default-salt-change-me')
@@ -98,6 +221,8 @@ if not os.path.exists(BACKUP_DIR):
     os.makedirs(BACKUP_DIR)
 if not os.path.exists(DELETED_MONTHS_DIR):
     os.makedirs(DELETED_MONTHS_DIR)
+if not os.path.exists(CHEQUE_UPLOAD_DIR):
+    os.makedirs(CHEQUE_UPLOAD_DIR)
 
 
 
@@ -164,17 +289,22 @@ def format_amount(value):
 app.jinja_env.filters["amount"] = format_amount
 
 def apply_excel_amount_format(filename):
-    """Remove decimal .00 display from amount columns before saving or downloading."""
+    """Format normal record amounts and cheque-deposit amounts before download."""
     if not os.path.exists(filename):
         return
     wb = load_workbook(filename)
     ws = wb.active
-    for row in ws.iter_rows(min_row=2):
+    marker_row = find_cheque_section_row(ws)
+    normal_end = (marker_row - 1) if marker_row else ws.max_row
+    for row_no in range(2, normal_end + 1):
         for col in [6, 7, 9]:
-            cell = row[col - 1]
+            cell = ws.cell(row_no, col)
             cell.number_format = "#,##0"
             if isinstance(cell.value, float) and cell.value.is_integer():
                 cell.value = int(cell.value)
+    if marker_row:
+        for row_no in range(marker_row + 2, ws.max_row + 1):
+            ws.cell(row_no, 5).number_format = '#,##0.00'
     wb.save(filename)
     wb.close()
 
@@ -319,21 +449,23 @@ def get_next_row_number(month_name):
     return max_no + 1
 
 def get_current_balance(month_name):
-    """Get the current balance from the last row"""
+    """Get the current balance from normal transaction rows only."""
     filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
     if not os.path.exists(filename):
         return 0
-    
     wb = load_workbook(filename)
     ws = wb.active
     last_balance = 0
-    
     for row in ws.iter_rows(min_row=2, values_only=True):
-        if row[8] is not None and row[1] != 'OPENING':
+        if str(row[0] or '').strip().upper() == CHEQUE_SECTION_MARKER:
+            break
+        if row[1] == 'OPENING':
             last_balance = float(row[8]) if row[8] else 0
-        elif row[1] == 'OPENING':
-            last_balance = float(row[8]) if row[8] else 0
-    
+        elif row[8] is not None:
+            try:
+                last_balance = float(row[8]) if row[8] else 0
+            except Exception:
+                pass
     wb.close()
     return last_balance
 
@@ -468,6 +600,15 @@ def end_month():
         if not active_month:
             return jsonify({'success': False, 'message': 'No active month found!'})
         
+        deposits = load_cheque_deposits()
+        changed = False
+        for dep in deposits.values():
+            if dep.get('month') == active_month and not dep.get('excel_added'):
+                dep['excel_added'] = True
+                changed = True
+        if changed:
+            save_cheque_deposits(deposits)
+        sync_cheque_deposits_to_excel(active_month, include_all=True)
         close_monthly_sheet(active_month)
         session.pop('active_month', None)
         
@@ -504,7 +645,8 @@ def view_month_records(month_name):
         return "Month not found", 404
     return render_template('view_month.html', 
                          month_name=month_name, 
-                         month_data=months_data[month_name])
+                         month_data=months_data[month_name],
+                         cheque_deposits=get_month_cheque_deposits(month_name))
 
 @app.route('/delete_record_from_month', methods=['POST'])
 @login_required
@@ -524,6 +666,7 @@ def delete_record_from_month():
         
         wb = load_workbook(filename)
         ws = wb.active
+        remove_cheque_section(ws)
         row_to_delete = None
         for row in range(3, ws.max_row + 1):
             if str(ws.cell(row, 2).value or '').strip() == str(ref_no).strip():
@@ -539,6 +682,7 @@ def delete_record_from_month():
 
             wb.save(filename)
             wb.close()
+            sync_cheque_deposits_to_excel(month_name)
             return jsonify({'success': True, 'message': f'Record deleted and references re-indexed successfully!'})
         else:
             wb.close()
@@ -569,6 +713,7 @@ def update_record_in_month():
 
         wb = load_workbook(filename)
         ws = wb.active
+        remove_cheque_section(ws)
         row_to_update = None
         for row in range(3, ws.max_row + 1):
             if str(ws.cell(row, 2).value or '').strip() == str(ref_no).strip():
@@ -593,6 +738,7 @@ def update_record_in_month():
 
         wb.save(filename)
         wb.close()
+        sync_cheque_deposits_to_excel(month_name)
         return jsonify({'success': True, 'message': 'Record updated successfully!'})
 
     except Exception as e:
@@ -602,106 +748,74 @@ def update_record_in_month():
 @app.route('/get_month_records/<month_name>')
 @login_required
 def get_month_records(month_name):
-    """Get records for a specific month"""
+    """Get normal transaction records for a specific month."""
     try:
         filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
         if not os.path.exists(filename):
             return jsonify({'records': []})
-        
         wb = load_workbook(filename)
         ws = wb.active
-        
         records = []
         for row in ws.iter_rows(min_row=3, values_only=True):
-            if row[0] and row[0] != 'OPENING' and row[0] is not None:
+            if str(row[0] or '').strip().upper() == CHEQUE_SECTION_MARKER:
+                break
+            if row[0] and row[1] and str(row[1]).startswith('UTA-'):
                 records.append({
-                    'no': row[0],
-                    'ref_no': row[1] if row[1] else '',
-                    'date': str(row[2]) if row[2] else '',
-                    'subject': row[3] if row[3] else '',
-                    'pass_no': row[4] if row[4] else '',
+                    'no': row[0], 'ref_no': row[1] or '', 'date': str(row[2]) if row[2] else '',
+                    'subject': row[3] or '', 'pass_no': row[4] or '',
                     'in_payment': float(row[5]) if row[5] else 0,
                     'out_payment': float(row[6]) if row[6] else 0,
-                    'sub_agent': row[7] if row[7] else '',
-                    'balance': float(row[8]) if row[8] else 0
+                    'sub_agent': row[7] or '', 'balance': float(row[8]) if row[8] else 0
                 })
-        
         wb.close()
         return jsonify({'records': records})
-        
     except Exception as e:
         print(f"Error getting records: {e}")
         return jsonify({'records': [], 'error': str(e)})
 
 def recalculate_and_sort_sheet(ws):
-    """Sort all transaction rows by date (opening row stays first), renumber, and recalculate balances."""
-    # Collect opening row (row 2, col B == 'OPENING')
+    """Sort normal transactions, renumber references and recalculate balances."""
     opening_row_data = None
     transaction_rows = []
-
     for row in ws.iter_rows(min_row=2, values_only=True):
         row = list(row)
+        if str(row[0] or '').strip().upper() == CHEQUE_SECTION_MARKER:
+            break
         if row[1] == 'OPENING':
             opening_row_data = row
-        elif row[0] is not None:
+        elif row[0] is not None and row[1] and str(row[1]).startswith('UTA-'):
             transaction_rows.append(row)
-
     if opening_row_data is None:
         return
-
     def parse_date_safe(row):
         try:
             date_val = row[2]
             if isinstance(date_val, str):
                 return datetime.strptime(date_val, '%Y-%m-%d')
-            elif hasattr(date_val, 'year'):
+            if hasattr(date_val, 'year'):
                 return datetime(date_val.year, date_val.month, date_val.day)
         except Exception:
             pass
         return datetime(9999, 12, 31)
-
     transaction_rows.sort(key=parse_date_safe)
-
-    # Clear rows from row 2 onward, then re-write
     ws.delete_rows(2, ws.max_row)
-
-    # Write opening row back
     ws.append(opening_row_data)
     opening_row_idx = ws.max_row
     opening_fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
     opening_font = Font(bold=True, color="2E7D32")
     for col in range(1, 10):
-        cell = ws.cell(opening_row_idx, col)
-        cell.fill = opening_fill
-        cell.font = opening_font
+        ws.cell(opening_row_idx, col).fill = opening_fill
+        ws.cell(opening_row_idx, col).font = opening_font
     for col in [6, 7, 9]:
         ws.cell(opening_row_idx, col).number_format = '#,##0'
-
-    # Write sorted transactions with recalculated balances and reassigned ref numbers
     balance = float(opening_row_data[8]) if opening_row_data[8] is not None else 0
     for i, row in enumerate(transaction_rows):
         in_payment = float(row[5]) if row[5] else 0
         out_payment = float(row[6]) if row[6] else 0
         balance = balance + in_payment - out_payment
-
-        # Reassign ref number based on sorted position (1-based)
-        new_ref_no = f"UTA-{str(i + 1).zfill(2)}"
-
-        new_row = [
-            i + 2,         # Row No (#)
-            new_ref_no,    # Ref No — reassigned sequentially after date sort
-            row[2],        # Date
-            row[3],        # Subject
-            row[4],        # Pass No
-            in_payment,
-            out_payment,
-            row[7],        # Sub Agent
-            balance
-        ]
-        ws.append(new_row)
-        row_idx = ws.max_row
+        ws.append([i + 2, f"UTA-{str(i + 1).zfill(2)}", row[2], row[3], row[4], in_payment, out_payment, row[7], balance])
         for col in [6, 7, 9]:
-            ws.cell(row_idx, col).number_format = '#,##0'
+            ws.cell(ws.max_row, col).number_format = '#,##0'
 
 
 @app.route('/save_records', methods=['POST'])
@@ -725,6 +839,7 @@ def save_records():
         
         wb = load_workbook(filename)
         ws = wb.active
+        remove_cheque_section(ws)
         
         next_ref_num = get_next_reference_number(active_month)
         current_balance = get_current_balance(active_month)
@@ -762,6 +877,7 @@ def save_records():
 
         wb.save(filename)
         wb.close()
+        sync_cheque_deposits_to_excel(active_month)
         
         return jsonify({
             'success': True,
@@ -805,6 +921,8 @@ def get_stats():
             opening_balance = 0
 
             for row in ws.iter_rows(min_row=2, values_only=True):
+                if str(row[0] or '').strip().upper() == CHEQUE_SECTION_MARKER:
+                    break
                 if row[1] == 'OPENING':
                     opening_balance = float(row[8]) if row[8] else 0
                 elif row[0] is not None:
@@ -848,6 +966,8 @@ def get_month_stats(month_name):
         total_references = set()
         
         for row in ws.iter_rows(min_row=2, values_only=True):
+            if str(row[0] or '').strip().upper() == CHEQUE_SECTION_MARKER:
+                break
             if row[0] == 'OPENING':
                 opening_balance = float(row[8]) if row[8] else 0
             elif row[0] and row[0] != 'OPENING' and row[0] is not None:
@@ -873,6 +993,218 @@ def get_month_stats(month_name):
     except Exception as e:
         print(f"Error getting month stats: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/cheque-deposits')
+@login_required
+def cheque_deposits_page():
+    active_month = get_active_month()
+    months_data = load_months_data()
+    deposits = get_month_cheque_deposits(active_month)
+    return render_template(
+        'cheque_deposits.html',
+        active_month=active_month,
+        month_display=months_data.get(active_month, {}).get('display_name', 'No Active Month') if active_month else 'No Active Month',
+        deposits=deposits,
+        next_deposit_id=next_cheque_deposit_id(active_month) if active_month else ''
+    )
+
+
+@app.route('/save_cheque_deposit', methods=['POST'])
+@login_required
+def save_cheque_deposit():
+    try:
+        active_month = get_active_month()
+        if not active_month:
+            return jsonify({'success': False, 'message': 'No active month. Create a month first.'}), 400
+
+        deposit_id = str(request.form.get('deposit_id', '')).strip() or next_cheque_deposit_id(active_month)
+        deposits = load_cheque_deposits()
+        existing = deposits.get(deposit_id, {})
+
+        image_filename = existing.get('image_filename', '')
+        image = request.files.get('slip_image')
+        if image and image.filename:
+            if not cheque_file_allowed(image.filename):
+                return jsonify({'success': False, 'message': 'Only PNG, JPG, JPEG or WEBP images are allowed.'}), 400
+            ext = secure_filename(image.filename).rsplit('.', 1)[1].lower()
+            image_filename = f"{secure_filename(deposit_id)}.{ext}"
+            image.save(os.path.join(CHEQUE_UPLOAD_DIR, image_filename))
+
+        entry = {
+            'deposit_id': deposit_id,
+            'month': active_month,
+            'date': str(request.form.get('date', '')).strip(),
+            'time': str(request.form.get('time', '')).strip(),
+            'transaction_id': str(request.form.get('transaction_id', '')).strip(),
+            'location': str(request.form.get('location', '')).strip(),
+            'account_number': str(request.form.get('account_number', '')).strip(),
+            'account_name': str(request.form.get('account_name', '')).strip(),
+            'nic_number': str(request.form.get('nic_number', '')).strip(),
+            'contact_number': str(request.form.get('contact_number', '')).strip(),
+            'reference_number': str(request.form.get('reference_number', '')).strip(),
+            'cheque_no': str(request.form.get('cheque_no', '')).strip(),
+            'bank': str(request.form.get('bank', '')).strip(),
+            'branch': str(request.form.get('branch', '')).strip(),
+            'amount': parse_amount(request.form.get('amount', 0)),
+            'notes': str(request.form.get('notes', '')).strip(),
+            'raw_text': str(request.form.get('raw_text', '')).strip(),
+            'image_filename': image_filename,
+            'excel_added': bool(existing.get('excel_added', False)),
+            'created_by': existing.get('created_by') or session.get('user'),
+            'created_at': existing.get('created_at') or datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+        deposits[deposit_id] = entry
+        save_cheque_deposits(deposits)
+
+        if entry['excel_added']:
+            sync_cheque_deposits_to_excel(active_month)
+
+        return jsonify({
+            'success': True,
+            'message': 'Cheque deposit saved successfully.',
+            'deposit_id': deposit_id,
+            'deposit': entry
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error saving cheque deposit: {str(e)}'}), 500
+
+
+@app.route('/add_cheque_deposit_to_excel', methods=['POST'])
+@login_required
+def add_cheque_deposit_to_excel():
+    try:
+        data = request.get_json(silent=True) or {}
+        deposit_id = str(data.get('deposit_id', '')).strip()
+        deposits = load_cheque_deposits()
+        if deposit_id not in deposits:
+            return jsonify({'success': False, 'message': 'Save the cheque deposit first.'}), 404
+
+        entry = deposits[deposit_id]
+        month_name = entry.get('month')
+        entry['excel_added'] = True
+        entry['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        deposits[deposit_id] = entry
+        save_cheque_deposits(deposits)
+        sync_cheque_deposits_to_excel(month_name)
+        return jsonify({'success': True, 'message': 'Added to the existing Records Excel sheet.'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error adding to Excel: {str(e)}'}), 500
+
+
+@app.route('/delete_cheque_deposit', methods=['POST'])
+@login_required
+def delete_cheque_deposit():
+    try:
+        data = request.get_json(silent=True) or {}
+        deposit_id = str(data.get('deposit_id', '')).strip()
+        deposits = load_cheque_deposits()
+        if deposit_id not in deposits:
+            return jsonify({'success': False, 'message': 'Cheque deposit not found.'}), 404
+
+        entry = deposits[deposit_id]
+        month_name = entry.get('month')
+        image_filename = entry.get('image_filename')
+        if image_filename:
+            image_path = os.path.join(CHEQUE_UPLOAD_DIR, image_filename)
+            if os.path.exists(image_path):
+                try:
+                    os.remove(image_path)
+                except OSError:
+                    pass
+        del deposits[deposit_id]
+        save_cheque_deposits(deposits)
+        if month_name:
+            sync_cheque_deposits_to_excel(month_name)
+        return jsonify({'success': True, 'message': 'Cheque deposit deleted.'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error deleting cheque deposit: {str(e)}'}), 500
+
+
+@app.route('/cheque_deposit_image/<deposit_id>')
+@login_required
+def cheque_deposit_image(deposit_id):
+    deposits = load_cheque_deposits()
+    entry = deposits.get(deposit_id)
+    if not entry or not entry.get('image_filename'):
+        return 'Image not found', 404
+    path = os.path.join(CHEQUE_UPLOAD_DIR, entry['image_filename'])
+    if not os.path.exists(path):
+        return 'Image not found', 404
+    return send_file(path)
+
+
+@app.route('/cheque_deposit_pdf/<deposit_id>')
+@login_required
+def cheque_deposit_pdf(deposit_id):
+    deposits = load_cheque_deposits()
+    entry = deposits.get(deposit_id)
+    if not entry:
+        return 'Cheque deposit not found', 404
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    pdf.setTitle(f"UTA Cheque Deposit - {deposit_id}")
+
+    pdf.setFont('Helvetica-Bold', 18)
+    pdf.drawString(48, height - 55, 'UTA Manpower Service')
+    pdf.setFont('Helvetica-Bold', 14)
+    pdf.drawString(48, height - 82, 'Cheque Deposit Slip Record')
+    pdf.setStrokeColorRGB(0.85, 0.08, 0.20)
+    pdf.line(48, height - 94, width - 48, height - 94)
+
+    fields = [
+        ('Deposit ID', entry.get('deposit_id', '')),
+        ('Date', entry.get('date', '')),
+        ('Time', entry.get('time', '')),
+        ('Transaction ID', entry.get('transaction_id', '')),
+        ('Location', entry.get('location', '')),
+        ('Account Number', entry.get('account_number', '')),
+        ('Account Name', entry.get('account_name', '')),
+        ('NIC Number', entry.get('nic_number', '')),
+        ('Contact Number', entry.get('contact_number', '')),
+        ('Reference Number', entry.get('reference_number', '')),
+        ('Cheque No', entry.get('cheque_no', '')),
+        ('Bank', entry.get('bank', '')),
+        ('Branch', entry.get('branch', '')),
+        ('Amount', format_amount(entry.get('amount', 0))),
+        ('Notes', entry.get('notes', '')),
+    ]
+
+    y = height - 125
+    for label, value in fields:
+        pdf.setFont('Helvetica-Bold', 10)
+        pdf.drawString(48, y, f'{label}:')
+        pdf.setFont('Helvetica', 10)
+        display = str(value or '-')
+        if len(display) > 70:
+            display = display[:67] + '...'
+        pdf.drawString(155, y, display)
+        y -= 18
+        if y < 180:
+            pdf.showPage()
+            y = height - 60
+
+    image_filename = entry.get('image_filename')
+    if image_filename:
+        image_path = os.path.join(CHEQUE_UPLOAD_DIR, image_filename)
+        if os.path.exists(image_path):
+            try:
+                img = ImageReader(image_path)
+                iw, ih = img.getSize()
+                max_w, max_h = width - 96, min(280, y - 55)
+                if max_h > 80:
+                    scale = min(max_w / iw, max_h / ih)
+                    draw_w, draw_h = iw * scale, ih * scale
+                    pdf.drawImage(img, 48, max(45, y - draw_h - 10), width=draw_w, height=draw_h, preserveAspectRatio=True)
+            except Exception:
+                pass
+
+    pdf.save()
+    buffer.seek(0)
+    return send_file(buffer, mimetype='application/pdf', as_attachment=True, download_name=f'{deposit_id}.pdf')
 
 
 @app.route('/backup')
@@ -949,6 +1281,8 @@ def download_excel(month_name):
     try:
         filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
         if os.path.exists(filename):
+            month_info = load_months_data().get(month_name, {})
+            sync_cheque_deposits_to_excel(month_name, include_all=(month_info.get('status') == 'closed'))
             apply_excel_amount_format(filename)
             return send_file(
                 filename, 

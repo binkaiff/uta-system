@@ -4120,3 +4120,96 @@ button { font-family: inherit; }
         padding-right: 12px;
     }
 }
+
+
+/* =========================================================
+   CHEQUE DEPOSIT MODULE
+   ========================================================= */
+.cheque-page .header { margin-bottom: 22px; }
+.cheque-month-strip {
+    background: #fff; border: 1px solid #e3e7ee; border-radius: 14px; padding: 15px 18px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(15,23,42,.04);
+}
+.cheque-month-strip > div:first-child { display: flex; flex-direction: column; gap: 3px; }
+.cheque-month-strip span { color: #6b7280; font-size: 12px; text-transform: uppercase; font-weight: 700; letter-spacing: .45px; }
+.cheque-month-strip strong { color: #1a1a2e; font-size: 17px; }
+.cheque-excel-note { color: #475569; font-size: 13px; }
+.cheque-excel-note i { color: #249347; margin-right: 7px; }
+.cheque-workspace { display: grid; grid-template-columns: minmax(300px, .8fr) minmax(520px, 1.5fr); gap: 20px; align-items: start; }
+.cheque-upload-card, .cheque-form-card, .saved-cheques-card {
+    background: #fff; border: 1px solid #e5e9f0; border-radius: 16px; box-shadow: 0 3px 12px rgba(15,23,42,.05);
+}
+.cheque-upload-card, .cheque-form-card { padding: 20px; }
+.cheque-section-heading { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 17px; }
+.cheque-section-heading > i { width: 38px; height: 38px; display:flex; align-items:center; justify-content:center; border-radius:10px; background:#fce8ec; color:#d7193f; font-size:16px; }
+.cheque-section-heading h3 { color:#1a1a2e; margin:0 0 3px; font-size:17px; }
+.cheque-section-heading p { color:#697386; margin:0; font-size:12px; line-height:1.45; }
+.cheque-dropzone {
+    min-height: 330px; border: 2px dashed #ccd3de; border-radius: 14px; background: #f9fafc;
+    display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: pointer; transition: .2s ease;
+}
+.cheque-dropzone:hover { border-color:#d7193f; background:#fffafb; }
+#uploadPrompt { display:flex; flex-direction:column; align-items:center; text-align:center; gap:9px; padding:25px; color:#5f6775; }
+#uploadPrompt i { font-size:36px; color:#d7193f; }
+#uploadPrompt strong { color:#1a1a2e; font-size:15px; }
+#uploadPrompt span { font-size:12px; }
+#slipPreview { width:100%; max-height:500px; object-fit:contain; background:#fff; }
+.ocr-progress-wrap { margin-top:14px; }
+.ocr-status { display:flex; justify-content:space-between; gap:12px; font-size:12px; color:#606a78; margin-bottom:7px; }
+.ocr-progress { height:7px; background:#edf0f4; border-radius:999px; overflow:hidden; }
+#ocrProgressBar { height:100%; width:0; background:#1a275c; transition:width .2s ease; }
+.cheque-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.cheque-form-grid .form-group { padding:0; margin:0; gap:7px; }
+.cheque-form-grid .form-group label { text-transform:none; letter-spacing:0; font-size:12px; color:#445066; }
+.cheque-form-grid input, .cheque-form-grid textarea {
+    width:100%; border:1px solid #dbe1ea; border-radius:10px; background:#fbfcfd; padding:11px 12px;
+    color:#1a1a2e; font:inherit; font-size:13px; outline:none; transition:.2s ease;
+}
+.cheque-form-grid input:focus, .cheque-form-grid textarea:focus { border-color:#b9c3d3; background:#fff; box-shadow:0 0 0 3px rgba(26,39,92,.06); }
+.cheque-form-grid input[readonly] { background:#f0f3f7; color:#596274; }
+.cheque-span-2 { grid-column:1/-1; }
+.cheque-action-row { display:flex; flex-wrap:wrap; gap:10px; margin-top:18px; padding-top:17px; border-top:1px solid #edf0f4; }
+.btn-save-cheque, .btn-add-excel, .cheque-secondary-btn {
+    border:none; border-radius:9px; min-height:42px; padding:0 17px; display:inline-flex; align-items:center; justify-content:center;
+    gap:8px; font-weight:650; font-size:13px; cursor:pointer; transition:.2s ease; text-decoration:none;
+}
+.btn-save-cheque { background:#d7193f; color:#fff; }
+.btn-add-excel { background:#249347; color:#fff; }
+.cheque-secondary-btn { background:#fff; color:#465164; border:1px solid #d9dfe8; }
+.cheque-upload-card > .cheque-secondary-btn { width:100%; margin-top:12px; }
+.cheque-secondary-btn:disabled { opacity:.5; cursor:not-allowed; }
+.btn-save-cheque:hover, .btn-add-excel:hover, .cheque-secondary-btn:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 5px 12px rgba(15,23,42,.09); }
+.saved-cheques-card { margin-top:20px; overflow:hidden; }
+.saved-cheques-heading { padding:17px 20px; display:flex; justify-content:space-between; align-items:center; gap:15px; border-bottom:1px solid #edf0f4; }
+.saved-cheques-heading h3 { margin:0 0 3px; color:#1a1a2e; font-size:17px; }
+.saved-cheques-heading h3 i { color:#d7193f; margin-right:7px; }
+.saved-cheques-heading p { margin:0; color:#6b7280; font-size:12px; }
+.saved-count { background:#f0f2f5; color:#4d5869; border-radius:999px; padding:6px 11px; font-size:11px; font-weight:700; white-space:nowrap; }
+.cheque-list-table th, .cheque-list-table td { white-space:nowrap; }
+.cheque-list-table td:nth-child(6) { white-space:normal; min-width:180px; }
+.excel-status { display:inline-flex; align-items:center; gap:5px; border-radius:999px; padding:5px 9px; font-size:10px; font-weight:750; }
+.excel-status.added { background:#e8f5eb; color:#237a3e; }
+.excel-status.pending { background:#f0f2f5; color:#606978; }
+.cheque-list-empty { padding:42px 20px; text-align:center; color:#788293; }
+.cheque-list-empty i { font-size:31px; color:#a8b0bc; margin-bottom:10px; }
+.cheque-list-empty p { margin:0; }
+.cheque-empty-state { background:#fff; border:1px solid #e5e9f0; border-radius:18px; padding:50px 25px; text-align:center; }
+.cheque-empty-state h2 { color:#1a1a2e; margin:12px 0 8px; }
+.cheque-empty-state p { color:#6b7280; margin-bottom:22px; }
+.cheque-month-section { margin-top:24px; }
+.cheque-pdf-link { display:inline-flex; align-items:center; gap:6px; padding:7px 10px; border-radius:8px; text-decoration:none; color:#c51639; background:#fff; border:1px solid #e0e4ea; font-size:12px; font-weight:650; }
+.cheque-pdf-link:hover { background:#f7f8fa; }
+
+@media (max-width: 1100px) {
+    .cheque-workspace { grid-template-columns:1fr; }
+    .cheque-dropzone { min-height:260px; }
+}
+@media (max-width: 700px) {
+    .cheque-month-strip { flex-direction:column; align-items:flex-start; }
+    .cheque-form-grid { grid-template-columns:1fr; }
+    .cheque-span-2 { grid-column:auto; }
+    .cheque-action-row > button { width:100%; }
+    .saved-cheques-heading { align-items:flex-start; }
+}
+
