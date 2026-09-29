@@ -336,46 +336,6 @@
             color: rgba(0, 0, 0, 0.6);
         }
 
-
-        /* System Selector */
-        .system-selector {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-bottom: 22px;
-            background: #f6f7fa;
-            padding: 5px;
-            border-radius: 13px;
-            border: 1px solid #edf0f5;
-        }
-        .system-option {
-            border: 0;
-            background: transparent;
-            color: #667085;
-            padding: 11px 8px;
-            border-radius: 10px;
-            font-family: inherit;
-            font-size: 13px;
-            font-weight: 700;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 7px;
-            transition: all .2s ease;
-        }
-        .system-option.active {
-            background: #ffffff;
-            color: #DC143C;
-            box-shadow: 0 2px 8px rgba(15,23,42,.08);
-        }
-        .system-hint {
-            font-size: 11px;
-            color: #8a94a6;
-            text-align: center;
-            margin: -10px 0 18px;
-        }
-
         /* Responsive */
         @media (max-width: 480px) {
             .login-card {
@@ -416,16 +376,6 @@
 
             <form id="loginForm" onsubmit="handleLogin(event)">
                 <div id="alertMessage" class="alert" style="display: none;"></div>
-
-                <div class="system-selector" role="group" aria-label="Select system">
-                    <button type="button" class="system-option active" data-system="accounts" onclick="selectSystem('accounts', this)">
-                        <i class="fas fa-wallet"></i> Accounts
-                    </button>
-                    <button type="button" class="system-option" data-system="candidate" onclick="selectSystem('candidate', this)">
-                        <i class="fas fa-users"></i> Candidates
-                    </button>
-                </div>
-                <div id="systemHint" class="system-hint">Accounts Management System</div>
                 
                 <div class="form-group">
                     <div class="input-icon">
@@ -460,48 +410,51 @@
     </div>
 
     <script>
-        let selectedSystem = 'accounts';
-
-        function selectSystem(system, button) {
-            selectedSystem = system;
-            document.querySelectorAll('.system-option').forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
-            document.getElementById('systemHint').textContent =
-                system === 'candidate' ? 'Candidate Management System' : 'Accounts Management System';
-            document.getElementById('password').value = '';
-            document.getElementById('alertMessage').style.display = 'none';
-        }
-
         async function handleLogin(event) {
             event.preventDefault();
+            
             const username = document.getElementById('username').value.trim().toLowerCase();
             const password = document.getElementById('password').value;
             const alertDiv = document.getElementById('alertMessage');
             const loginBtn = document.querySelector('.login-btn');
+            
+            // Clear previous alert
             alertDiv.style.display = 'none';
-
-            if (!username) { showAlert('Please enter username', 'error'); return; }
-            if (!password) { showAlert('Please enter password', 'error'); return; }
-
+            
+            if (!username) {
+                showAlert('Please enter username', 'error');
+                return;
+            }
+            
+            if (!password) {
+                showAlert('Please enter password', 'error');
+                return;
+            }
+            
+            // Disable form while processing
             loginBtn.disabled = true;
             loginBtn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Verifying...';
-
+            
             try {
                 const response = await fetch('/login', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        username: username,
-                        password: password,
-                        system: selectedSystem
-                    })
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username: username, password: password })
                 });
+                
                 const data = await response.json();
+                
                 if (data.success) {
                     showAlert('Login successful! Redirecting...', 'success');
-                    setTimeout(() => { window.location.href = data.redirect || '/dashboard'; }, 500);
+                    
+                    setTimeout(() => {
+                        sessionStorage.setItem('uta_logged_in', '1');
+                        window.location.href = '/dashboard';
+                    }, 1000);
                 } else {
-                    showAlert(data.message || 'Invalid username or password.', 'error');
+                    showAlert('Invalid username or password. Please try again.', 'error');
                     loginBtn.disabled = false;
                     loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Login to Dashboard';
                     document.getElementById('password').value = '';
@@ -512,14 +465,26 @@
                 loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Login to Dashboard';
             }
         }
-
+        
         function showAlert(message, type) {
             const alertDiv = document.getElementById('alertMessage');
             alertDiv.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i> ${message}`;
             alertDiv.className = `alert alert-${type === 'success' ? 'success' : 'error'}`;
             alertDiv.style.display = 'flex';
-            if (type !== 'success') setTimeout(() => { alertDiv.style.display = 'none'; }, 3000);
+            
+            if (type !== 'success') {
+                setTimeout(() => {
+                    alertDiv.style.display = 'none';
+                }, 3000);
+            }
         }
+        
+        // Add Enter key support
+        document.getElementById('password').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                handleLogin(e);
+            }
+        });
     </script>
 </body>
 </html>

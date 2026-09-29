@@ -1,412 +1,918 @@
 <!DOCTYPE html>
+
 <html lang="en">
+
 <head>
+
     <meta charset="UTF-8">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>UTA Manpower Service - Cheque Deposits</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=7">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=10">
+
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
 </head>
+
 <body>
+
 <div class="dashboard-container">
+
     <div class="sidebar">
+
         <div class="logo">
+
             <div class="logo-icon"><img src="{{ url_for('static', filename='logo.png') }}" alt="UTA Logo"></div>
+
             <h2>UTA</h2><p>Manpower Service</p><div class="license-badge">SLBFE Licensed</div>
+
         </div>
+
         <nav class="nav-menu">
+
             <a href="/dashboard" class="nav-item"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+
             <a href="/enter" class="nav-item"><i class="fas fa-plus-circle"></i><span>Enter Records</span></a>
+
             <a href="/cheque-deposits" class="nav-item active"><i class="fas fa-money-check-dollar"></i><span>Cheque Deposits</span></a>
+
             <a href="/view" class="nav-item"><i class="fas fa-table-list"></i><span>View Records</span></a>
+
             <a href="/backup" class="nav-item"><i class="fas fa-box-archive"></i><span>Backup</span></a>
-            <a href="/logout" class="nav-item logout-link" onclick="sessionStorage.removeItem('uta_logged_in')"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+
+            <a href="/logout" class="nav-item logout-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+
         </nav>
+
     </div>
 
+
+
     <div class="main-content cheque-page">
+
         <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+
         <div class="header">
+
             <div class="header-title">
+
                 <h1>Cheque Deposits</h1>
+
                 <p>Upload a deposit slip, review the extracted text, then save it to the active month.</p>
+
             </div>
+
             <div class="header-actions">
+
                 <div class="date-display"><i class="far fa-calendar-alt"></i><span id="currentDate"></span></div>
+
                 <div class="user-profile">
+
                     <img src="{{ url_for('static', filename=current_user_profile.photo) }}" alt="{{ current_user_profile.name }}" class="user-profile-image">
+
                     <div class="user-profile-details"><span class="user-profile-name">{{ current_user_profile.name }}</span><span class="user-profile-role">{{ current_user_profile.role }}</span></div>
+
                 </div>
+
             </div>
+
         </div>
 
+
+
         {% if not active_month %}
+
         <div class="cheque-empty-state">
+
             <div class="empty-state-icon"><i class="fas fa-calendar-plus"></i></div>
+
             <h2>No Active Month</h2>
+
             <p>Create a month from Dashboard before adding cheque deposits.</p>
+
             <a href="/dashboard" class="btn-create-month"><i class="fas fa-arrow-left"></i> Go to Dashboard</a>
+
         </div>
+
         {% else %}
+
         <div class="cheque-month-strip">
+
             <div><span>Active Month</span><strong>{{ month_display }}</strong></div>
+
             <div class="cheque-excel-note"><i class="fas fa-file-excel"></i> Excel: same <strong>Records</strong> sheet, below transaction records</div>
+
         </div>
+
+
 
         <div id="chequeMessage" class="message" style="display:none"></div>
 
+
+
         <div class="cheque-workspace">
+
             <section class="cheque-upload-card">
+
                 <div class="cheque-section-heading"><i class="fas fa-cloud-arrow-up"></i><div><h3>Upload Deposit Slip</h3><p>OCR starts automatically after selecting an image.</p></div></div>
+
                 <label class="cheque-dropzone" for="slipImage">
+
                     <input type="file" id="slipImage" accept="image/png,image/jpeg,image/webp" hidden>
+
                     <div id="uploadPrompt">
+
                         <i class="fas fa-receipt"></i>
+
                         <strong>Choose cheque deposit slip</strong>
+
                         <span>PNG, JPG, JPEG or WEBP</span>
+
                     </div>
+
                     <img id="slipPreview" alt="Slip preview" style="display:none">
+
                 </label>
+
                 <div class="ocr-progress-wrap" id="ocrProgressWrap" style="display:none">
+
                     <div class="ocr-status"><span id="ocrStatus">Preparing OCR...</span><strong id="ocrPercent">0%</strong></div>
+
                     <div class="ocr-progress"><div id="ocrProgressBar"></div></div>
+
                 </div>
+
                 <button class="cheque-secondary-btn" type="button" onclick="runOCR()" id="rerunOcrBtn" disabled><i class="fas fa-rotate"></i> Re-run OCR</button>
+
             </section>
+
+
 
             <section class="cheque-form-card">
+
                 <div class="cheque-section-heading"><i class="fas fa-pen-to-square"></i><div><h3>Extracted Details</h3><p>Every field is editable before saving.</p></div></div>
+
                 <form id="chequeForm" onsubmit="return false;">
+
                     <div class="cheque-form-grid">
+
                         <div class="form-group"><label>Deposit ID</label><input id="depositId" name="deposit_id" value="{{ next_deposit_id }}" readonly></div>
+
                         <div class="form-group"><label>Date</label><input id="chequeDate" name="date" type="date"></div>
+
                         <div class="form-group"><label>Time</label><input id="chequeTime" name="time" type="time" step="1"></div>
+
                         <div class="form-group"><label>Transaction ID</label><input id="transactionId" name="transaction_id" type="text"></div>
+
                         <div class="form-group"><label>Location</label><input id="location" name="location" type="text"></div>
+
                         <div class="form-group"><label>Account Number</label><input id="accountNumber" name="account_number" type="text"></div>
+
                         <div class="form-group cheque-span-2"><label>Account Name</label><input id="accountName" name="account_name" type="text"></div>
+
                         <div class="form-group"><label>NIC Number</label><input id="nicNumber" name="nic_number" type="text"></div>
+
                         <div class="form-group"><label>Contact Number</label><input id="contactNumber" name="contact_number" type="text"></div>
+
                         <div class="form-group"><label>Reference Number</label><input id="referenceNumber" name="reference_number" type="text"></div>
+
                         <div class="form-group"><label>Cheque No</label><input id="chequeNo" name="cheque_no" type="text"></div>
+
                         <div class="form-group"><label>Bank</label><input id="bank" name="bank" type="text"></div>
+
                         <div class="form-group"><label>Branch</label><input id="branch" name="branch" type="text"></div>
+
                         <div class="form-group cheque-span-2"><label>Amount</label><input id="chequeAmount" name="amount" type="text" inputmode="decimal" placeholder="0.00"></div>
+
                         <div class="form-group cheque-span-2"><label>Notes</label><textarea id="notes" name="notes" rows="3" placeholder="Optional notes"></textarea></div>
+
                         <div class="form-group cheque-span-2"><label>OCR Text</label><textarea id="rawText" name="raw_text" rows="6" placeholder="Extracted OCR text will appear here and can be edited."></textarea></div>
+
                     </div>
+
                     <div class="cheque-action-row">
+
                         <button class="btn-save-cheque" type="button" onclick="saveDeposit(false)"><i class="fas fa-floppy-disk"></i> Save Deposit</button>
+
                         <button class="btn-add-excel" type="button" onclick="saveDeposit(true)"><i class="fas fa-file-excel"></i> Add to Excel</button>
+
                         <button class="cheque-secondary-btn" type="button" onclick="downloadCurrentPdf()"><i class="fas fa-file-pdf"></i> Download PDF</button>
+
                         <button class="cheque-secondary-btn" type="button" onclick="clearChequeForm()"><i class="fas fa-eraser"></i> Clear</button>
+
                     </div>
+
                 </form>
+
             </section>
+
         </div>
 
+
+
         <section class="saved-cheques-card">
+
             <div class="saved-cheques-heading">
+
                 <div><h3><i class="fas fa-clock-rotate-left"></i> Saved Cheque Deposits</h3><p>These entries also appear below the transaction records in View Records.</p></div>
+
                 <span class="saved-count">{{ deposits|length }} saved</span>
+
             </div>
+
             {% if deposits %}
+
             <div class="table-wrapper">
+
                 <table class="records-table cheque-list-table">
+
                     <thead><tr><th>Action</th><th>Date</th><th>Time</th><th>Deposit ID</th><th>Amount</th><th>Notes</th><th>Excel</th></tr></thead>
+
                     <tbody>
+
                     {% for dep in deposits %}
+
                         <tr>
+
                             <td class="action-cell">
-                                <button class="edit-icon-btn" type="button" data-deposit-id="{{ dep.deposit_id }}" onclick="editDepositById(this.dataset.depositId)" title="Edit"><i class="fas fa-edit"></i></button>
-                                <button class="delete-icon-btn" onclick="deleteDeposit('{{ dep.deposit_id }}')" title="Delete"><i class="fas fa-trash-alt"></i></button>
+
+                                <button
+                                    class="edit-icon-btn"
+                                    type="button"
+                                    data-deposit='{{ dep|tojson|forceescape }}'
+                                    onclick="editDepositFromButton(this)"
+                                    title="Edit"
+                                ><i class="fas fa-edit"></i></button>
+
+                                <button
+                                    class="delete-icon-btn"
+                                    type="button"
+                                    data-deposit-id="{{ dep.deposit_id }}"
+                                    onclick="deleteDeposit(this.dataset.depositId)"
+                                    title="Delete"
+                                ><i class="fas fa-trash-alt"></i></button>
+
                             </td>
+
                             <td>{{ dep.date or '-' }}</td><td>{{ dep.time or '-' }}</td>
+
                             <td><span class="ref-badge">{{ dep.deposit_id }}</span></td>
+
                             <td class="payment-in-cell">{{ dep.amount|amount }}</td>
+
                             <td>{{ dep.notes or '-' }}</td>
-                            <td>{% if dep.excel_added %}<span class="excel-status added"><i class="fas fa-check"></i> Added</span>{% else %}<span class="excel-status pending">Pending</span>{% endif %}</td>
+
+                            <td class="saved-cheque-excel-cell">
+
+                                {% if dep.excel_added %}
+
+                                    <span class="excel-status added"><i class="fas fa-check"></i> Added</span>
+
+                                {% else %}
+
+                                    <div class="saved-cheque-excel-actions">
+
+                                        <span class="excel-status pending">Pending</span>
+
+                                        <button
+
+                                            type="button"
+
+                                            class="saved-excel-add-btn"
+
+                                            data-deposit-id="{{ dep.deposit_id }}"
+                                            onclick="addSavedDepositToExcel(this.dataset.depositId, this)" 
+                                            title="Add this saved cheque deposit directly to Excel"
+
+                                        >
+
+                                            <i class="fas fa-file-excel"></i>
+
+                                            <span>Add to Excel</span>
+
+                                        </button>
+
+                                    </div>
+
+                                {% endif %}
+
+                            </td>
+
                         </tr>
+
                     {% endfor %}
+
                     </tbody>
+
                 </table>
+
             </div>
+
             {% else %}
+
             <div class="cheque-list-empty"><i class="fas fa-money-check"></i><p>No cheque deposits saved for this month yet.</p></div>
+
             {% endif %}
+
         </section>
+
         {% endif %}
+
     </div>
+
 </div>
 
-<div id="chequePageData"
-     data-deposits="{{ deposits|tojson|forceescape }}"
-     data-next-deposit-id="{{ next_deposit_id }}"
-     hidden></div>
+
 
 <script>
-const chequePageData = document.getElementById('chequePageData');
-let existingDeposits = [];
-try {
-    existingDeposits = JSON.parse(chequePageData?.dataset.deposits || '[]');
-} catch (error) {
-    console.error('Could not read cheque deposit data:', error);
-}
-const nextDepositId = chequePageData?.dataset.nextDepositId || '';
+
+const existingDeposits = Array.from(
+    document.querySelectorAll('.edit-icon-btn[data-deposit]')
+).map(button => {
+    try {
+        return JSON.parse(button.dataset.deposit || '{}');
+    } catch (error) {
+        console.error('Could not parse saved cheque deposit data:', error);
+        return {};
+    }
+}).filter(dep => dep && dep.deposit_id);
+
 let selectedImageFile = null;
+
 let currentSavedDepositId = '';
 
+
+
 function updateDate() {
+
     const el = document.getElementById('currentDate');
+
     if (el) el.textContent = new Date().toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+
 }
+
+
 
 function toggleSidebar() {
+
     const sidebar = document.querySelector('.sidebar');
+
     if (sidebar) sidebar.classList.toggle('active');
+
 }
+
+
 
 function normalizeDate(value) {
+
     if (!value) return '';
+
     const m = value.match(/(\d{1,2})[\-\/.](\d{1,2})[\-\/.](\d{4})/);
+
     if (!m) return '';
+
     return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+
 }
+
+
 
 function findLabeled(text, labels) {
+
     for (const label of labels) {
+
         const pattern = new RegExp(label + '\\s*(?:-|:)?\\s*([^\\n\\r]+)', 'i');
+
         const match = text.match(pattern);
+
         if (match) return match[1].trim();
+
     }
+
     return '';
+
 }
+
+
 
 function parseOCRText(text) {
+
     const cleaned = text.replace(/\r/g, '').replace(/[|]/g, 'I');
+
     const result = {};
+
     result.date = normalizeDate(findLabeled(cleaned, ['Date']));
+
     const time = findLabeled(cleaned, ['Time']).match(/\d{1,2}:\d{2}(?::\d{2})?/);
+
     result.time = time ? time[0] : '';
+
     result.transaction_id = findLabeled(cleaned, ['Transaction\\s*ID', 'Transaction\\s*No']);
+
     result.location = findLabeled(cleaned, ['Location']);
+
     result.account_number = findLabeled(cleaned, ['Account\\s*Number', 'Account\\s*No']);
+
     result.account_name = findLabeled(cleaned, ['Account\\s*Name']);
+
     result.nic_number = findLabeled(cleaned, ['NIC\\s*Number', 'NIC\\s*No']);
+
     result.contact_number = findLabeled(cleaned, ['Contact\\s*Number', 'Contact\\s*No']);
+
     result.reference_number = findLabeled(cleaned, ['Reference\\s*Number', 'Reference\\s*No']);
 
+
+
     // Try the row underneath a "Cheque No Bank Branch Amount" heading.
+
     const lines = cleaned.split('\n').map(v => v.trim()).filter(Boolean);
+
     let detailLine = '';
+
     for (let i = 0; i < lines.length; i++) {
+
         if (/Cheque\s*No/i.test(lines[i]) && /Bank/i.test(lines[i]) && /Branch/i.test(lines[i])) {
+
             detailLine = lines[i + 1] || '';
+
             break;
+
         }
+
     }
+
     if (detailLine) {
+
         const nums = detailLine.match(/[A-Za-z0-9.,]+/g) || [];
+
         if (nums.length >= 4) {
+
             result.cheque_no = nums[0] || '';
+
             result.bank = nums[1] || '';
+
             result.branch = nums[2] || '';
+
             const amountParts = nums.slice(3).join('').replace(/[^0-9.]/g, '');
+
             result.amount = amountParts;
+
         }
+
     }
+
+
 
     if (!result.cheque_no) result.cheque_no = findLabeled(cleaned, ['Cheque\\s*No']);
+
     if (!result.bank) result.bank = findLabeled(cleaned, ['Bank']);
+
     if (!result.branch) result.branch = findLabeled(cleaned, ['Branch']);
+
     if (!result.amount) {
+
         const amount = findLabeled(cleaned, ['Amount']).replace(/[^0-9.,]/g, '');
+
         result.amount = amount;
+
     }
+
     return result;
+
 }
+
+
 
 function setField(id, value) {
+
     const el = document.getElementById(id);
+
     if (el && value !== undefined && value !== null && String(value).trim() !== '') el.value = value;
+
 }
+
+
 
 function applyOCRResult(data) {
+
     setField('chequeDate', data.date);
+
     setField('chequeTime', data.time);
+
     setField('transactionId', data.transaction_id);
+
     setField('location', data.location);
+
     setField('accountNumber', data.account_number);
+
     setField('accountName', data.account_name);
+
     setField('nicNumber', data.nic_number);
+
     setField('contactNumber', data.contact_number);
+
     setField('referenceNumber', data.reference_number);
+
     setField('chequeNo', data.cheque_no);
+
     setField('bank', data.bank);
+
     setField('branch', data.branch);
+
     setField('chequeAmount', data.amount);
+
 }
+
+
 
 async function runOCR() {
+
     if (!selectedImageFile) return;
+
     if (!window.Tesseract) {
+
         showChequeMessage('OCR library could not load. Check your internet connection.', 'error');
+
         return;
+
     }
+
     const wrap = document.getElementById('ocrProgressWrap');
+
     const bar = document.getElementById('ocrProgressBar');
+
     const status = document.getElementById('ocrStatus');
+
     const percent = document.getElementById('ocrPercent');
+
     wrap.style.display = 'block';
+
     bar.style.width = '0%';
+
     status.textContent = 'Reading slip...';
+
     try {
+
         const result = await Tesseract.recognize(selectedImageFile, 'eng', {
+
             logger: m => {
+
                 if (typeof m.progress === 'number') {
+
                     const p = Math.round(m.progress * 100);
+
                     bar.style.width = p + '%';
+
                     percent.textContent = p + '%';
+
                 }
+
                 if (m.status) status.textContent = m.status.replace(/_/g, ' ');
+
             }
+
         });
+
         const text = result.data.text || '';
+
         document.getElementById('rawText').value = text;
+
         applyOCRResult(parseOCRText(text));
+
         status.textContent = 'OCR complete - review the fields before saving';
+
         percent.textContent = '100%';
+
         bar.style.width = '100%';
+
         showChequeMessage('Text extracted. Please verify and edit any incorrect values.', 'success');
+
     } catch (err) {
+
         console.error(err);
+
         status.textContent = 'OCR failed';
+
         showChequeMessage('Could not read this image automatically. You can still enter the details manually.', 'error');
+
     }
+
 }
+
+
 
 const imageInput = document.getElementById('slipImage');
+
 if (imageInput) {
+
     imageInput.addEventListener('change', function() {
+
         selectedImageFile = this.files && this.files[0] ? this.files[0] : null;
+
         if (!selectedImageFile) return;
+
         const preview = document.getElementById('slipPreview');
+
         preview.src = URL.createObjectURL(selectedImageFile);
+
         preview.style.display = 'block';
+
         document.getElementById('uploadPrompt').style.display = 'none';
+
         document.getElementById('rerunOcrBtn').disabled = false;
+
         runOCR();
+
     });
+
 }
+
+
 
 function buildFormData() {
+
     const form = document.getElementById('chequeForm');
+
     const fd = new FormData(form);
+
     if (selectedImageFile) fd.append('slip_image', selectedImageFile);
+
     return fd;
+
 }
+
+
 
 async function saveDeposit(addExcel) {
+
     const date = document.getElementById('chequeDate').value;
+
     const amount = document.getElementById('chequeAmount').value.trim();
+
     if (!date) {
+
         showChequeMessage('Please enter the deposit date.', 'error');
+
         return;
+
     }
+
     if (!amount) {
+
         showChequeMessage('Please enter the deposit amount.', 'error');
+
         return;
+
     }
+
     try {
+
         const res = await fetch('/save_cheque_deposit', {method:'POST', body:buildFormData()});
+
         const data = await res.json();
+
         if (!data.success) throw new Error(data.message || 'Save failed');
+
         currentSavedDepositId = data.deposit_id;
+
         document.getElementById('depositId').value = data.deposit_id;
+
         if (addExcel) {
+
             const excelRes = await fetch('/add_cheque_deposit_to_excel', {
+
                 method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({deposit_id:data.deposit_id})
+
             });
+
             const excelData = await excelRes.json();
+
             if (!excelData.success) throw new Error(excelData.message || 'Excel update failed');
+
             showChequeMessage(excelData.message, 'success');
+
         } else {
+
             showChequeMessage(data.message, 'success');
+
         }
+
         setTimeout(() => window.location.reload(), 900);
+
     } catch (err) {
+
         showChequeMessage(err.message || 'Unable to save cheque deposit.', 'error');
+
     }
+
 }
 
-function editDepositById(id) {
-    const dep = existingDeposits.find(item => item.deposit_id === id);
-    if (!dep) {
-        showChequeMessage('Could not load this cheque deposit.', 'error');
-        return;
+
+
+function editDepositFromButton(button) {
+    try {
+        const dep = JSON.parse(button.dataset.deposit || '{}');
+        editDeposit(dep);
+    } catch (error) {
+        console.error(error);
+        showChequeMessage('Could not open this saved cheque deposit.', 'error');
     }
-    editDeposit(dep);
 }
 
 function editDeposit(dep) {
+
     currentSavedDepositId = dep.deposit_id || '';
+
     document.getElementById('depositId').value = dep.deposit_id || '';
+
     setField('chequeDate', dep.date); setField('chequeTime', dep.time); setField('transactionId', dep.transaction_id);
+
     setField('location', dep.location); setField('accountNumber', dep.account_number); setField('accountName', dep.account_name);
+
     setField('nicNumber', dep.nic_number); setField('contactNumber', dep.contact_number); setField('referenceNumber', dep.reference_number);
+
     setField('chequeNo', dep.cheque_no); setField('bank', dep.bank); setField('branch', dep.branch); setField('chequeAmount', dep.amount);
+
     document.getElementById('notes').value = dep.notes || '';
+
     document.getElementById('rawText').value = dep.raw_text || '';
+
     if (dep.image_filename) {
+
         const preview = document.getElementById('slipPreview');
+
         preview.src = `/cheque_deposit_image/${encodeURIComponent(dep.deposit_id)}`;
+
         preview.style.display = 'block';
+
         document.getElementById('uploadPrompt').style.display = 'none';
+
     }
+
     window.scrollTo({top:0, behavior:'smooth'});
+
     showChequeMessage('Editing ' + dep.deposit_id, 'success');
+
 }
+
+
+
+
+
+async function addSavedDepositToExcel(depositId, button) {
+
+    if (!depositId || !button || button.disabled) return;
+
+
+
+    const originalHtml = button.innerHTML;
+
+    button.disabled = true;
+
+    button.classList.add('loading');
+
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Adding...</span>';
+
+
+
+    try {
+
+        const response = await fetch('/add_cheque_deposit_to_excel', {
+
+            method: 'POST',
+
+            headers: {'Content-Type': 'application/json'},
+
+            body: JSON.stringify({deposit_id: depositId})
+
+        });
+
+
+
+        const data = await response.json();
+
+
+
+        if (!response.ok || !data.success) {
+
+            throw new Error(data.message || 'Unable to add this deposit to Excel.');
+
+        }
+
+
+
+        const cell = button.closest('.saved-cheque-excel-cell');
+
+        if (cell) {
+
+            cell.innerHTML = '<span class="excel-status added"><i class="fas fa-check"></i> Added</span>';
+
+        }
+
+
+
+        showChequeMessage(data.message || 'Added to Excel successfully.', 'success');
+
+    } catch (error) {
+
+        button.disabled = false;
+
+        button.classList.remove('loading');
+
+        button.innerHTML = originalHtml;
+
+        showChequeMessage(error.message || 'Unable to add this deposit to Excel.', 'error');
+
+    }
+
+}
+
+
 
 async function deleteDeposit(id) {
+
     if (!confirm('Delete cheque deposit ' + id + '?')) return;
+
     const res = await fetch('/delete_cheque_deposit', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({deposit_id:id})});
+
     const data = await res.json();
+
     if (data.success) window.location.reload(); else showChequeMessage(data.message || 'Delete failed', 'error');
+
 }
+
+
 
 function downloadCurrentPdf() {
+
     const id = document.getElementById('depositId').value.trim();
+
     const exists = existingDeposits.some(d => d.deposit_id === id) || currentSavedDepositId === id;
+
     if (!id || !exists) {
+
         showChequeMessage('Save the deposit first, then download the PDF.', 'error');
+
         return;
+
     }
+
     window.location.href = '/cheque_deposit_pdf/' + encodeURIComponent(id);
+
 }
+
+
 
 function clearChequeForm() {
+
     document.getElementById('chequeForm').reset();
-    document.getElementById('depositId').value = nextDepositId;
+
+    document.getElementById('depositId').value = '{{ next_deposit_id }}';
+
     selectedImageFile = null; currentSavedDepositId = '';
+
     const preview = document.getElementById('slipPreview');
+
     preview.src = ''; preview.style.display = 'none';
+
     document.getElementById('uploadPrompt').style.display = 'flex';
+
     document.getElementById('ocrProgressWrap').style.display = 'none';
+
     document.getElementById('rerunOcrBtn').disabled = true;
+
 }
 
+
+
 function showChequeMessage(message, type) {
+
     const el = document.getElementById('chequeMessage');
+
     if (!el) return;
+
     el.className = 'message ' + type;
+
     el.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${message}`;
+
     el.style.display = 'block';
+
 }
+
+
 
 updateDate();
 
+
+
 </script>
+
 </body>
+
 </html>
