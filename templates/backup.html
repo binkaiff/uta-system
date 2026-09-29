@@ -74,7 +74,7 @@
         function showToast(message, type) { const toast = document.getElementById('toastMessage'); toast.innerHTML = '<i class="fas fa-' + (type === 'success' ? 'check-circle' : 'exclamation-circle') + '"></i> ' + message; toast.className = 'toast-message ' + type; toast.style.display = 'flex'; setTimeout(() => { toast.style.display = 'none'; }, 3000); }
         function toggleSidebar() { const sidebar = document.querySelector('.sidebar'); if (sidebar) sidebar.classList.toggle('active'); }
         updateDate();
-        if (!sessionStorage.getItem('uta_logged_in')) { window.location.replace('/logout'); }
+        
     </script>
 </body>
 </html>
