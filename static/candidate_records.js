@@ -89,8 +89,11 @@ function candidateRowHtml(candidate) {
             <td>${statusBadge(candidate.interviewStatus)}</td>
             <td>
                 <div class="candidate-table-actions">
-                    <button class="candidate-action-btn view" data-view-candidate="${escapeHtml(candidate.candidateId)}" title="View / Edit">
-                        <i class="fas fa-eye"></i>
+                    <a class="candidate-action-btn profile" href="/candidate/profile/${encodeURIComponent(candidate.candidateId)}" title="Open Profile">
+                        <i class="fas fa-id-card"></i>
+                    </a>
+                    <button class="candidate-action-btn view" data-view-candidate="${escapeHtml(candidate.candidateId)}" title="Quick Edit">
+                        <i class="fas fa-pen"></i>
                     </button>
                 </div>
             </td>

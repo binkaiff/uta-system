@@ -354,6 +354,30 @@ CANDIDATE_INVOICES_FILE = os.path.join(CANDIDATE_DATA_DIR, 'invoices.json')
 
 CANDIDATE_RECORDS_FILE = os.path.join(CANDIDATE_DATA_DIR, 'candidates.json')
 
+CANDIDATE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'candidate_uploads')
+CANDIDATE_DOCUMENT_TYPES = {'passport', 'cv', 'medical', 'visa'}
+CANDIDATE_DOCUMENT_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'webp', 'doc', 'docx'}
+
+def get_candidate_record(candidate_id):
+    return next(
+        (c for c in load_candidate_records() if str(c.get('candidateId')) == str(candidate_id)),
+        None
+    )
+
+def candidate_upload_folder(candidate_id):
+    safe_id = secure_filename(str(candidate_id)) or 'candidate'
+    folder = os.path.join(CANDIDATE_UPLOAD_DIR, safe_id)
+    os.makedirs(folder, exist_ok=True)
+    return folder
+
+def candidate_document_allowed(filename):
+    return (
+        bool(filename)
+        and '.' in filename
+        and filename.rsplit('.', 1)[1].lower() in CANDIDATE_DOCUMENT_EXTENSIONS
+    )
+
+
 
 
 def load_candidate_records():
@@ -672,6 +696,10 @@ if not os.path.exists(DELETED_MONTHS_DIR):
 if not os.path.exists(CHEQUE_UPLOAD_DIR):
 
     os.makedirs(CHEQUE_UPLOAD_DIR)
+
+
+if not os.path.exists(CANDIDATE_UPLOAD_DIR):
+    os.makedirs(CANDIDATE_UPLOAD_DIR)
 
 
 
@@ -1361,6 +1389,21 @@ def candidate_records():
     )
 
 
+@app.route('/candidate/profile/<candidate_id>')
+@candidate_login_required
+def candidate_profile(candidate_id):
+    candidate = get_candidate_record(candidate_id)
+    if not candidate:
+        return "Candidate not found", 404
+
+    return render_template(
+        'candidate/profile.html',
+        candidate=candidate,
+        current_user=get_candidate_user(),
+        current_date=datetime.now().strftime('%A, %d %B %Y')
+    )
+
+
 
 @app.route('/candidate/invoice')
 
@@ -1582,10 +1625,159 @@ def candidate_delete_api(candidate_id):
 
     save_candidate_records(new_candidates)
 
+    upload_folder = os.path.join(
+        CANDIDATE_UPLOAD_DIR,
+        secure_filename(str(candidate_id)) or 'candidate'
+    )
+    if os.path.isdir(upload_folder):
+        shutil.rmtree(upload_folder, ignore_errors=True)
+
     return jsonify({'success': True, 'message': 'Candidate deleted successfully.'})
 
 
 
+
+
+
+
+@app.route('/api/candidate/candidates/<candidate_id>/documents/<document_type>', methods=['POST'])
+@candidate_login_required
+def candidate_document_upload_api(candidate_id, document_type):
+    document_type = str(document_type).lower().strip()
+    if document_type not in CANDIDATE_DOCUMENT_TYPES:
+        return jsonify({'success': False, 'message': 'Invalid document type.'}), 400
+
+    upload = request.files.get('file')
+    if not upload or not upload.filename:
+        return jsonify({'success': False, 'message': 'Please select a file.'}), 400
+
+    if not candidate_document_allowed(upload.filename):
+        return jsonify({
+            'success': False,
+            'message': 'Allowed files: PDF, PNG, JPG, JPEG, WEBP, DOC, DOCX.'
+        }), 400
+
+    candidates = load_candidate_records()
+    index = next(
+        (i for i, c in enumerate(candidates) if str(c.get('candidateId')) == str(candidate_id)),
+        None
+    )
+    if index is None:
+        return jsonify({'success': False, 'message': 'Candidate not found.'}), 404
+
+    candidate = candidates[index]
+    documents = candidate.get('documents')
+    if not isinstance(documents, dict):
+        documents = {}
+
+    # Remove the previous file for this document type.
+    previous = documents.get(document_type) or {}
+    previous_filename = os.path.basename(str(previous.get('filename', '')))
+    folder = candidate_upload_folder(candidate_id)
+    if previous_filename:
+        previous_path = os.path.join(folder, previous_filename)
+        if os.path.isfile(previous_path):
+            try:
+                os.remove(previous_path)
+            except OSError:
+                pass
+
+    original_name = secure_filename(upload.filename)
+    extension = original_name.rsplit('.', 1)[1].lower()
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    stored_name = f"{document_type}_{timestamp}.{extension}"
+    destination = os.path.join(folder, stored_name)
+    upload.save(destination)
+
+    documents[document_type] = {
+        'filename': stored_name,
+        'originalName': original_name,
+        'uploadedAt': datetime.now().isoformat(timespec='seconds'),
+        'uploadedBy': get_candidate_user(),
+        'size': os.path.getsize(destination),
+    }
+
+    candidate['documents'] = documents
+    candidate['updatedAt'] = datetime.now().isoformat(timespec='seconds')
+    candidate['updatedBy'] = get_candidate_user()
+    candidates[index] = candidate
+    save_candidate_records(candidates)
+
+    return jsonify({
+        'success': True,
+        'message': f"{document_type.title()} document uploaded successfully.",
+        'document': documents[document_type],
+        'candidate': candidate
+    })
+
+
+@app.route('/candidate/documents/<candidate_id>/<document_type>')
+@candidate_login_required
+def candidate_document_view(candidate_id, document_type):
+    document_type = str(document_type).lower().strip()
+    if document_type not in CANDIDATE_DOCUMENT_TYPES:
+        return "Invalid document type", 400
+
+    candidate = get_candidate_record(candidate_id)
+    if not candidate:
+        return "Candidate not found", 404
+
+    documents = candidate.get('documents') or {}
+    metadata = documents.get(document_type) or {}
+    stored_name = os.path.basename(str(metadata.get('filename', '')))
+    if not stored_name:
+        return "Document not found", 404
+
+    folder = candidate_upload_folder(candidate_id)
+    file_path = os.path.abspath(os.path.join(folder, stored_name))
+    folder_path = os.path.abspath(folder)
+
+    if not file_path.startswith(folder_path + os.sep) or not os.path.isfile(file_path):
+        return "Document not found", 404
+
+    return send_file(
+        file_path,
+        as_attachment=request.args.get('download') == '1',
+        download_name=metadata.get('originalName') or stored_name
+    )
+
+
+@app.route('/api/candidate/candidates/<candidate_id>/documents/<document_type>', methods=['DELETE'])
+@candidate_login_required
+def candidate_document_delete_api(candidate_id, document_type):
+    document_type = str(document_type).lower().strip()
+    if document_type not in CANDIDATE_DOCUMENT_TYPES:
+        return jsonify({'success': False, 'message': 'Invalid document type.'}), 400
+
+    candidates = load_candidate_records()
+    index = next(
+        (i for i, c in enumerate(candidates) if str(c.get('candidateId')) == str(candidate_id)),
+        None
+    )
+    if index is None:
+        return jsonify({'success': False, 'message': 'Candidate not found.'}), 404
+
+    candidate = candidates[index]
+    documents = candidate.get('documents') or {}
+    metadata = documents.get(document_type) or {}
+    stored_name = os.path.basename(str(metadata.get('filename', '')))
+
+    if stored_name:
+        file_path = os.path.join(candidate_upload_folder(candidate_id), stored_name)
+        if os.path.isfile(file_path):
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+
+    documents.pop(document_type, None)
+    candidate['documents'] = documents
+    candidate['updatedAt'] = datetime.now().isoformat(timespec='seconds')
+    candidate['updatedBy'] = get_candidate_user()
+    candidates[index] = candidate
+    save_candidate_records(candidates)
+
+    return jsonify({'success': True, 'message': 'Document removed successfully.', 'candidate': candidate})
 
 
 @app.route('/api/candidate/invoices', methods=['GET'])

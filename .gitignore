@@ -2,3 +2,4 @@
 candidate_data/*.json
 __pycache__/
 *.pyc
+candidate_uploads/

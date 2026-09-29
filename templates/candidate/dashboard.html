@@ -81,7 +81,7 @@
             <div class="recent-candidate-list">
                 {% if recent_candidates %}
                     {% for candidate in recent_candidates %}
-                    <a href="{{ url_for('candidate_records') }}?open={{ candidate.candidateId }}" class="recent-candidate-row">
+                    <a href="{{ url_for('candidate_profile', candidate_id=candidate.candidateId) }}" class="recent-candidate-row">
                         <div class="recent-candidate-avatar">{{ candidate.fullName[:1]|upper }}</div>
                         <div class="recent-candidate-info">
                             <strong>{{ candidate.fullName }}</strong>
