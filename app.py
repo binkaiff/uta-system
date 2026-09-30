@@ -418,32 +418,25 @@ def next_candidate_invoice_number():
 
 
 
-# Display information for the two authorised UTA account users.
-
-# The image files should remain in /static as thanzeel.png and kaiff.png.
+# Display information for authorised UTA users.
+# Profile image files must remain in /static as thanzeel.png, kaiff.png and firnas.png.
 
 USER_PROFILES = {
-
     'thanzeel': {
-
         'name': 'Thanzeel',
-
         'role': 'Administrator',
-
         'photo': 'thanzeel.png',
-
     },
-
     'kaiff': {
-
         'name': 'Kaiff',
-
         'role': 'Administrator',
-
         'photo': 'kaiff.png',
-
     },
-
+    'firnas': {
+        'name': 'Firnas',
+        'role': 'Candidate Staff',
+        'photo': 'firnas.png',
+    },
 }
 
 
@@ -498,16 +491,9 @@ def inject_current_user_profile():
         'photo': 'logo.png',
     })
 
-    if current_system == 'candidate':
-        if username == 'firnas':
-            profile = {
-                'name': 'Firnas',
-                'role': 'Candidate Staff',
-                'photo': 'logo.png',
-            }
-        elif username in USER_PROFILES:
-            profile = dict(USER_PROFILES[username])
-            profile['role'] = 'Candidate Staff'
+    if current_system == 'candidate' and username in USER_PROFILES:
+        profile = dict(USER_PROFILES[username])
+        profile['role'] = 'Candidate Staff'
 
     return {
         'current_user_profile': profile,
@@ -1199,10 +1185,30 @@ def logout():
 @app.route('/candidate/dashboard')
 @candidate_login_required
 def candidate_dashboard():
+    invoices = load_candidate_invoices()
+    invoices.sort(key=lambda x: str(x.get('createdAt', '')), reverse=True)
+
+    today_key = datetime.now().strftime('%Y-%m-%d')
+    total_value = 0.0
+    today_count = 0
+
+    for invoice in invoices:
+        try:
+            total_value += float(invoice.get('grandTotal', 0) or 0)
+        except (TypeError, ValueError):
+            pass
+
+        if str(invoice.get('date', '')).strip() == today_key:
+            today_count += 1
+
     return render_template(
         'candidate/dashboard.html',
         current_user=get_candidate_user(),
-        current_date=datetime.now().strftime('%A, %d %B %Y')
+        current_date=datetime.now().strftime('%A, %d %B %Y'),
+        total_invoices=len(invoices),
+        today_invoices=today_count,
+        total_invoice_value=total_value,
+        recent_invoices=invoices[:5]
     )
 
 

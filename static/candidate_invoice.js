@@ -1,334 +1,359 @@
-// Initialize
-document.getElementById('invDate').valueAsDate = new Date();
-loadNextInvoiceNumber();
-loadInvoices();
-// No default item - empty by default
+let editingInvoiceId = null;
+
+function showInvoiceToast(message, type = 'success') {
+    const toast = document.getElementById('invoiceToast');
+    if (!toast) return;
+
+    toast.innerHTML = `<i class="fas ${type === 'success' ? 'fa-circle-check' : 'fa-circle-exclamation'}"></i><span>${escapeHtml(message)}</span>`;
+    toast.className = `invoice-toast show ${type}`;
+    clearTimeout(window.invoiceToastTimer);
+    window.invoiceToastTimer = setTimeout(() => {
+        toast.className = 'invoice-toast';
+    }, 2400);
+}
+
+async function initializeInvoicePage() {
+    const dateField = document.getElementById('invDate');
+    if (dateField) dateField.valueAsDate = new Date();
+
+    const editId = Number(new URLSearchParams(window.location.search).get('edit') || 0);
+    if (editId) {
+        await loadInvoiceForEdit(editId);
+    } else {
+        await loadNextInvoiceNumber();
+        addItem('', 1, 0);
+        previewInvoice();
+    }
+}
 
 async function loadNextInvoiceNumber() {
     try {
-        const res = await fetch('/api/candidate/invoices/next-number');
-        const data = await res.json();
+        const response = await fetch('/api/candidate/invoices/next-number');
+        const data = await response.json();
         if (data.success) document.getElementById('invNumber').value = data.invoiceNo;
-    } catch (err) { console.error('Unable to load next invoice number', err); }
+    } catch (error) {
+        console.error('Unable to load next invoice number', error);
+    }
 }
 
-// Format number with commas
-function formatNumber(num) {
-    return num.toLocaleString('en-IN');
-}
-
-// Bind events to existing items
-function bindItemEvents() {
-    document.querySelectorAll('#itemsBody tr').forEach(row => {
-        const qty = row.querySelector('.item-qty');
-        const price = row.querySelector('.item-price');
-        if (qty && price) {
-            qty.addEventListener('input', () => updateItemTotal(row));
-            price.addEventListener('input', () => updateItemTotal(row));
-            updateItemTotal(row);
+async function loadInvoiceForEdit(invoiceId) {
+    try {
+        const response = await fetch(`/api/candidate/invoices/${invoiceId}`);
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            showInvoiceToast(data.message || 'Unable to load invoice.', 'error');
+            await resetForm();
+            return;
         }
-    });
+
+        const invoice = data.invoice;
+        editingInvoiceId = Number(invoice.id);
+        document.getElementById('invNumber').value = invoice.invoiceNo || '';
+        document.getElementById('invDate').value = invoice.date || '';
+        document.getElementById('clientName').value = invoice.clientName || '';
+        document.getElementById('passportNo').value = invoice.passportNo || '';
+        document.getElementById('destination').value = invoice.destination || '';
+
+        const tbody = document.getElementById('itemsBody');
+        tbody.innerHTML = '';
+        const items = Array.isArray(invoice.items) && invoice.items.length ? invoice.items : [{ description: '', quantity: 1, price: 0 }];
+        items.forEach(item => addItem(item.description || '', Number(item.quantity || 1), Number(item.price || 0)));
+
+        setEditMode(true);
+        calculateTotals();
+        previewInvoice();
+    } catch (error) {
+        console.error(error);
+        showInvoiceToast('Unable to load invoice.', 'error');
+    }
+}
+
+function setEditMode(enabled) {
+    const title = document.getElementById('invoiceFormTitle');
+    const text = document.getElementById('saveInvoiceText');
+    if (title) title.textContent = enabled ? 'Edit Invoice' : 'Create New Invoice';
+    if (text) text.textContent = enabled ? 'Update Invoice' : 'Save Invoice';
+}
+
+function formatNumber(value) {
+    return Number(value || 0).toLocaleString('en-LK', { maximumFractionDigits: 2 });
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
+function addItem(description = '', quantity = 1, price = 0) {
+    const tbody = document.getElementById('itemsBody');
+    const row = tbody.insertRow();
+    row.innerHTML = `
+        <td><input type="text" class="item-desc" placeholder="Enter description" value="${escapeHtml(description)}"></td>
+        <td><input type="number" class="item-qty" value="${quantity}" min="1" step="1"></td>
+        <td><input type="number" class="item-price" value="${price}" min="0" step="100"></td>
+        <td><input type="text" class="item-total" readonly></td>
+        <td><button type="button" class="remove-btn" onclick="removeItem(this)" title="Remove item"><i class="fas fa-trash"></i></button></td>
+    `;
+
+    row.querySelector('.item-qty').addEventListener('input', () => updateItemTotal(row));
+    row.querySelector('.item-price').addEventListener('input', () => updateItemTotal(row));
+    row.querySelector('.item-desc').addEventListener('input', previewInvoice);
+    updateItemTotal(row);
+}
+
+function removeItem(button) {
+    const row = button.closest('tr');
+    if (row) row.remove();
+    calculateTotals();
+    previewInvoice();
 }
 
 function updateItemTotal(row) {
-    const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+    const quantity = parseFloat(row.querySelector('.item-qty').value) || 0;
     const price = parseFloat(row.querySelector('.item-price').value) || 0;
-    const total = qty * price;
-    row.querySelector('.item-total').value = formatNumber(total);
+    row.querySelector('.item-total').value = formatNumber(quantity * price);
     calculateTotals();
+    previewInvoice();
 }
 
 function calculateTotals() {
     let subtotal = 0;
     document.querySelectorAll('#itemsBody tr').forEach(row => {
-        const totalStr = row.querySelector('.item-total').value;
-        const total = parseFloat(totalStr.replace(/,/g, '')) || 0;
-        subtotal += total;
+        subtotal += parseFloat(String(row.querySelector('.item-total').value).replace(/,/g, '')) || 0;
     });
-    const vat = 0;
-    const grandTotal = subtotal + vat;
-    document.getElementById('subtotal').innerHTML = `LKR ${formatNumber(subtotal)}`;
-    document.getElementById('vat').innerHTML = `LKR ${formatNumber(vat)}`;
-    document.getElementById('grandTotal').innerHTML = `LKR ${formatNumber(grandTotal)}`;
-}
-
-function addItem() {
-    const tbody = document.getElementById('itemsBody');
-    const newRow = tbody.insertRow();
-    newRow.innerHTML = `
-        <td><input type="text" class="item-desc" placeholder="Description"></td>
-        <td><input type="number" class="item-qty" value="1" min="1"></td>
-        <td><input type="number" class="item-price" value="0" step="1000"></td>
-        <td><input type="text" class="item-total" readonly></td>
-        <td><button class="remove-btn" onclick="removeItem(this)"><i class="fas fa-trash"></i></button></td>
-    `;
-    const qty = newRow.querySelector('.item-qty');
-    const price = newRow.querySelector('.item-price');
-    qty.addEventListener('input', () => updateItemTotal(newRow));
-    price.addEventListener('input', () => updateItemTotal(newRow));
-    updateItemTotal(newRow);
-}
-
-function removeItem(btn) {
-    const row = btn.closest('tr');
-    if (document.querySelectorAll('#itemsBody tr').length > 0) {
-        row.remove();
-        calculateTotals();
-    }
+    document.getElementById('subtotal').textContent = `LKR ${formatNumber(subtotal)}`;
+    document.getElementById('vat').textContent = 'LKR 0';
+    document.getElementById('grandTotal').textContent = `LKR ${formatNumber(subtotal)}`;
 }
 
 function getInvoiceData() {
     const items = [];
     document.querySelectorAll('#itemsBody tr').forEach(row => {
-        const totalStr = row.querySelector('.item-total').value;
-        items.push({
-            description: row.querySelector('.item-desc').value,
-            quantity: parseFloat(row.querySelector('.item-qty').value) || 0,
-            price: parseFloat(row.querySelector('.item-price').value) || 0,
-            total: parseFloat(totalStr.replace(/,/g, '')) || 0
-        });
+        const description = row.querySelector('.item-desc').value.trim();
+        const quantity = parseFloat(row.querySelector('.item-qty').value) || 0;
+        const price = parseFloat(row.querySelector('.item-price').value) || 0;
+        items.push({ description, quantity, price, total: quantity * price });
     });
+
     const subtotal = items.reduce((sum, item) => sum + item.total, 0);
     return {
-        id: Date.now(),
-        invoiceNo: document.getElementById('invNumber').value,
+        invoiceNo: document.getElementById('invNumber').value.trim(),
         date: document.getElementById('invDate').value,
-        clientName: document.getElementById('clientName').value || '',
-        passportNo: document.getElementById('passportNo').value || '',
-        destination: document.getElementById('destination').value || '',
-        items: items,
-        subtotal: subtotal,
+        clientName: document.getElementById('clientName').value.trim(),
+        passportNo: document.getElementById('passportNo').value.trim(),
+        destination: document.getElementById('destination').value.trim(),
+        items,
+        subtotal,
         vat: 0,
-        grandTotal: subtotal,
-        createdAt: new Date().toISOString()
+        grandTotal: subtotal
     };
 }
 
-function generateA4InvoiceHTML(data) {
-    const itemsRows = data.items.map((item, index) => {
-        const priceFormatted = formatNumber(item.price);
-        const totalFormatted = formatNumber(item.total);
-        return `
-        <tr>
-            <td>${index + 1}</td>
-            <td>${item.description}</td>
-            <td style="text-align:center">${item.quantity}</td>
-            <td style="text-align:right">LKR ${priceFormatted}</td>
-            <td style="text-align:right">LKR ${totalFormatted}</td>
-        </tr>
-        `;
-    }).join('');
+function formatReceiptDate(dateValue) {
+    if (!dateValue) return '—';
+    const parts = String(dateValue).split('-');
+    return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dateValue;
+}
 
-    const clientDisplay = data.clientName ? data.clientName : '';
-    const passportDisplay = data.passportNo ? data.passportNo : '';
-    const destinationDisplay = data.destination ? data.destination : '';
+function numberToWords(number) {
+    number = Math.round(Number(number || 0));
+    if (number === 0) return 'Zero Rupees Only';
+    const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+    const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+    const underThousand = n => {
+        let text = '';
+        if (n >= 100) { text += `${ones[Math.floor(n / 100)]} Hundred `; n %= 100; }
+        if (n >= 20) { text += tens[Math.floor(n / 10)]; if (n % 10) text += ` ${ones[n % 10]}`; }
+        else if (n > 0) text += ones[n];
+        return text.trim();
+    };
+    const parts = [];
+    const millions = Math.floor(number / 1000000);
+    if (millions) parts.push(`${underThousand(millions)} Million`);
+    number %= 1000000;
+    const thousands = Math.floor(number / 1000);
+    if (thousands) parts.push(`${underThousand(thousands)} Thousand`);
+    number %= 1000;
+    if (number) parts.push(underThousand(number));
+    return `${parts.join(' ')} Rupees Only`;
+}
+
+function generateReceiptHTML(data, logoOverride = '') {
+    const logoUrl = logoOverride || window.UTA_LOGO_URL || '/static/invoice_logo.png';
+    const safeClient = escapeHtml(data.clientName || '—');
+    const safePassport = escapeHtml(data.passportNo || '—');
+    const safeDestination = escapeHtml(data.destination || '—');
+    const safeInvoiceNo = escapeHtml(data.invoiceNo || '—');
+
+    const rows = data.items.length
+        ? data.items.map((item, index) => `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${item.description ? escapeHtml(item.description) : '&nbsp;'}</td>
+                <td>${formatNumber(item.quantity)}</td>
+                <td>${formatNumber(item.price)}</td>
+                <td>${formatNumber(item.total)}</td>
+            </tr>`).join('')
+        : `<tr><td>1</td><td>&nbsp;</td><td>1</td><td>0</td><td>0</td></tr>`;
 
     return `
-        <!-- SECTION 1: MAIN CONTENT (Top - 99mm) -->
-        <div class="invoice-section-1">
-            <!-- Company Header -->
-            <div class="a4-company-header">
-                <div class="a4-company-name">UTA MANPOWER SERVICE</div>
-                <div class="a4-company-contact">
-                    utams1988@gmail.com | 0777733682 / 0778613271
+        <div class="uta-receipt">
+            <div class="receipt-head">
+                <div class="receipt-logo-wrap"><img src="${logoUrl}" class="receipt-logo" alt="UTA Logo"></div>
+                <div class="receipt-company">
+                    <h2>U.T.A. MANPOWER SERVICE</h2>
+                    <p>557, Main Street Kalmunaikudy-14</p>
+                    <p>utams1988@gmail.com &nbsp; | &nbsp; 077 773 3682 / 077 861 3271</p>
+                    <p class="licence">SLBFE Labour Licence No. 2179</p>
                 </div>
-                <div class="a4-license">
-                    SLBFE Licence No: 2179
-                </div>
-            </div>
-            
-            <!-- Invoice Title -->
-            <div class="a4-invoice-title">INVOICE</div>
-            
-            <!-- Two Column Details -->
-            <div class="a4-row">
-                <div class="a4-col">
-                    <div class="a4-info-box">
-                        <div class="a4-info-title">Invoice Details</div>
-                        <div class="a4-info-row">
-                            <span class="a4-info-label">Invoice No:</span>
-                            <span class="a4-info-value">${data.invoiceNo}</span>
-                        </div>
-                        <div class="a4-info-row">
-                            <span class="a4-info-label">Date:</span>
-                            <span class="a4-info-value">${new Date(data.date).toLocaleDateString('en-GB')}</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="a4-col">
-                    <div class="a4-info-box">
-                        <div class="a4-info-title">Travel Details</div>
-                        <div class="a4-info-row">
-                            <span class="a4-info-label">Passport No:</span>
-                            <span class="a4-info-value">${passportDisplay || '_____________'}</span>
-                        </div>
-                        <div class="a4-info-row">
-                            <span class="a4-info-label">Destination:</span>
-                            <span class="a4-info-value">${destinationDisplay || '_____________'}</span>
-                        </div>
-                    </div>
+                <div class="receipt-title-box">
+                    <h3>INVOICE</h3>
+                    <div class="receipt-no"><strong>No:</strong> ${safeInvoiceNo}</div>
+                    <div class="receipt-date"><strong>Date:</strong> ${formatReceiptDate(data.date)}</div>
                 </div>
             </div>
-            
-            <!-- Client Information -->
-            <div class="a4-client-box">
-                <p><strong>Bill To:</strong> ${clientDisplay || '_____________'}</p>
+
+            <div class="receipt-details">
+                <div class="receipt-detail-cell">
+                    <span class="receipt-detail-label">Name</span>
+                    <strong class="receipt-detail-value">${safeClient}</strong>
+                </div>
+                <div class="receipt-detail-cell">
+                    <span class="receipt-detail-label">Passport No.</span>
+                    <strong class="receipt-detail-value">${safePassport}</strong>
+                </div>
+                <div class="receipt-detail-cell">
+                    <span class="receipt-detail-label">Payment Type</span>
+                    <strong class="receipt-detail-value">Service / Processing Payment</strong>
+                </div>
+                <div class="receipt-detail-cell">
+                    <span class="receipt-detail-label">Destination</span>
+                    <strong class="receipt-detail-value">${safeDestination}</strong>
+                </div>
             </div>
-            
-            <!-- Items Table -->
-            <table class="a4-items-table">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Description</th>
-                        <th style="text-align:center">Qty</th>
-                        <th style="text-align:right">Unit Price</th>
-                        <th style="text-align:right">Amount</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${itemsRows}
-                    ${data.items.length === 0 ? '<tr><td colspan="5" style="text-align:center">No items</td></tr>' : ''}
-                </tbody>
-            </table>
-            
-            <!-- Totals -->
-            <div class="a4-totals">
-                <table class="a4-totals-table">
-                    <tr><td>Subtotal:</td><td style="text-align:right">LKR ${formatNumber(data.subtotal)}</td></tr>
-                    <tr><td>VAT (0%):</td><td style="text-align:right">LKR 0</td></tr>
-                    <tr class="a4-grand-total"><td><strong>Grand Total:</strong></td><td style="text-align:right"><strong>LKR ${formatNumber(data.grandTotal)}</strong></td></tr>
+
+            <div class="receipt-items">
+                <table>
+                    <thead><tr><th>#</th><th>Particulars</th><th>Qty</th><th>Rate (LKR)</th><th>Amount (LKR)</th></tr></thead>
+                    <tbody>${rows}</tbody>
                 </table>
             </div>
-            
-            <!-- Authorized Signature at Bottom Left -->
-            <div class="a4-signature">
-                <div class="signature-line"></div>
-                <div class="signature-label">Authorized Signature</div>
+
+            <div class="receipt-footer-row">
+                <div class="receipt-words receipt-footer-block">
+                    <span class="receipt-footer-label">Amount in words</span>
+                    <strong>${escapeHtml(numberToWords(data.grandTotal))}</strong>
+                    <small>Thank you for your payment.</small>
+                </div>
+                <div class="receipt-signature-inline receipt-footer-block">
+                    <div class="receipt-signature-line"></div>
+                    <span>Authorized Signature</span>
+                </div>
+                <div class="receipt-total-box receipt-footer-block">
+                    <div class="receipt-total-label">Total Amount</div>
+                    <div class="receipt-total-value">Rs. ${formatNumber(data.grandTotal)}</div>
+                </div>
             </div>
-        </div>
-
-        <!-- SECTION 2: EMPTY -->
-        <div class="invoice-section-2"></div>
-
-        <!-- SECTION 3: EMPTY -->
-        <div class="invoice-section-3"></div>
-    `;
+        </div>`;
 }
 
 function previewInvoice() {
-    const data = getInvoiceData();
-    const a4Content = document.getElementById('a4Content');
-    a4Content.innerHTML = generateA4InvoiceHTML(data);
+    document.getElementById('a4Content').innerHTML = generateReceiptHTML(getInvoiceData());
 }
 
 async function saveInvoice() {
     const data = getInvoiceData();
-    if (!data.clientName) { alert('Please enter client name before saving'); return; }
+    if (!data.clientName) { showInvoiceToast('Please enter the client name.', 'error'); return; }
+    if (!data.date) { showInvoiceToast('Please select the invoice date.', 'error'); return; }
+    if (data.items.length === 0) { showInvoiceToast('Please add at least one payment item.', 'error'); return; }
+    if (data.items.length > 4) { showInvoiceToast('Maximum 4 payment items for this receipt size.', 'error'); return; }
+
+    const button = document.getElementById('saveInvoiceBtn');
+    if (button) button.disabled = true;
+
     try {
-        const response = await fetch('/api/candidate/invoices', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+        const isEditing = Boolean(editingInvoiceId);
+        const response = await fetch(isEditing ? `/api/candidate/invoices/${editingInvoiceId}` : '/api/candidate/invoices', {
+            method: isEditing ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
         const result = await response.json();
-        if (!response.ok || !result.success) { alert(result.message || 'Unable to save invoice'); return; }
-        alert('Invoice saved successfully!');
-        await loadInvoices();
-        resetForm();
-    } catch (error) { console.error(error); alert('Unable to save invoice. Please try again.'); }
+        if (!response.ok || !result.success) {
+            showInvoiceToast(result.message || 'Unable to save invoice.', 'error');
+            return;
+        }
+
+        editingInvoiceId = Number(result.invoice.id);
+        document.getElementById('invNumber').value = result.invoice.invoiceNo;
+        document.getElementById('a4Content').innerHTML = generateReceiptHTML(result.invoice);
+        setEditMode(true);
+        showInvoiceToast(isEditing ? 'Invoice updated' : 'Invoice saved', 'success');
+        window.history.replaceState({}, '', `${window.location.pathname}?edit=${editingInvoiceId}`);
+    } catch (error) {
+        console.error(error);
+        showInvoiceToast('Unable to save invoice. Please try again.', 'error');
+    } finally {
+        if (button) button.disabled = false;
+    }
 }
 
-async function loadInvoices() {
-    const container = document.getElementById('invoicesList');
-    try {
-        const response = await fetch('/api/candidate/invoices');
-        const result = await response.json();
-        const invoices = result.invoices || [];
-        window.utaCandidateInvoices = invoices;
-        if (invoices.length === 0) { container.innerHTML = '<div style="text-align:center; padding:40px; color:#999;">No invoices created yet.</div>'; return; }
-        container.innerHTML = invoices.map(inv => `
-            <div class="invoice-card"><div class="invoice-card-info"><span class="invoice-card-number"><i class="fas fa-hashtag"></i> ${escapeHtml(inv.invoiceNo || '')}</span><span class="invoice-card-client"><i class="fas fa-user"></i> ${escapeHtml(inv.clientName || '')}</span><span class="invoice-card-amount"><i class="fas fa-rupee-sign"></i> ${formatNumber(Number(inv.grandTotal || 0))}</span></div><div class="invoice-card-actions"><button class="icon-btn" onclick="viewInvoice(${Number(inv.id)})" title="View"><i class="fas fa-eye"></i></button><button class="icon-btn" onclick="deleteInvoice(${Number(inv.id)})" title="Delete"><i class="fas fa-trash"></i></button></div></div>`).join('');
-    } catch (error) { console.error(error); container.innerHTML = '<div style="text-align:center; padding:40px; color:#c62828;">Unable to load invoices.</div>'; }
-}
-function escapeHtml(value) { return String(value ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;'); }
-function viewInvoice(id) { const invoices = window.utaCandidateInvoices || []; const invoice = invoices.find(inv => Number(inv.id) === Number(id)); if (invoice) { document.getElementById('a4Content').innerHTML = generateA4InvoiceHTML(invoice); document.querySelector('.a4-preview').scrollIntoView({behavior:'smooth'}); } }
-async function deleteInvoice(id) { if (!confirm('Delete this invoice?')) return; try { const response = await fetch(`/api/candidate/invoices/${id}`, {method:'DELETE'}); const result = await response.json(); if (!response.ok || !result.success) { alert(result.message || 'Unable to delete invoice'); return; } await loadInvoices(); await loadNextInvoiceNumber(); } catch (error) { console.error(error); alert('Unable to delete invoice.'); } }
-
-function resetForm() {
-    loadNextInvoiceNumber();
-    document.getElementById('invDate').valueAsDate = new Date();
+async function resetForm() {
+    editingInvoiceId = null;
+    window.history.replaceState({}, '', window.location.pathname);
     document.getElementById('clientName').value = '';
     document.getElementById('passportNo').value = '';
     document.getElementById('destination').value = '';
-    
-    const tbody = document.getElementById('itemsBody');
-    tbody.innerHTML = '';
+    document.getElementById('invDate').valueAsDate = new Date();
+    document.getElementById('itemsBody').innerHTML = '';
+    addItem('', 1, 0);
+    setEditMode(false);
+    await loadNextInvoiceNumber();
     calculateTotals();
     previewInvoice();
 }
 
-function printInvoice() {
-    const invoiceHTML = document.getElementById('a4Content').innerHTML;
-    const invoiceNo = document.getElementById('invNumber').value;
-    
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>Invoice - ${invoiceNo}</title>
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-            <style>
-                * { margin: 0; padding: 0; box-sizing: border-box; }
-                body { font-family: 'Inter', sans-serif; background: white; }
-                .a4-invoice { width: 210mm; margin: 0 auto; background: white; }
-                .invoice-section-1 { height: 99mm; padding: 8px 12px; border-bottom: 2px solid #DC143C; page-break-inside: avoid; background: white; display: flex; flex-direction: column; position: relative; }
-                .a4-company-header { text-align: center; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #eee; }
-                .a4-company-name { font-size: 16px; font-weight: 800; color: #8B0000; }
-                .a4-company-contact { font-size: 7px; color: #666; margin-top: 2px; }
-                .a4-license { font-size: 7px; color: #DC143C; font-weight: 600; }
-                .a4-invoice-title { font-size: 16px; font-weight: 800; text-align: center; color: #DC143C; margin: 4px 0; }
-                .a4-row { display: flex; gap: 15px; margin-bottom: 6px; }
-                .a4-col { flex: 1; }
-                .a4-info-box { background: #f8f9fa; border-radius: 6px; padding: 6px 10px; border: 1px solid #e8ecf2; }
-                .a4-info-title { font-size: 9px; font-weight: 700; color: #DC143C; margin-bottom: 5px; border-left: 2px solid #DC143C; padding-left: 5px; }
-                .a4-info-row { display: flex; margin-bottom: 4px; font-size: 8px; }
-                .a4-info-label { width: 70px; font-weight: 600; color: #555; }
-                .a4-info-value { flex: 1; color: #333; }
-                .a4-client-box { background: #f0f2f5; border-radius: 6px; padding: 5px 10px; margin-bottom: 6px; border: 1px solid #e8ecf2; }
-                .a4-client-box p { font-size: 8px; margin: 2px 0; }
-                .a4-client-box strong { color: #DC143C; }
-                .a4-items-table { width: 100%; border-collapse: collapse; font-size: 7px; margin: 4px 0; }
-                .a4-items-table th { background: #DC143C; color: white; padding: 4px; text-align: left; }
-                .a4-items-table td { padding: 3px 4px; border-bottom: 1px solid #e8ecf2; }
-                .a4-items-table td:last-child, .a4-items-table th:last-child { text-align: right; }
-                .a4-totals { margin-top: 4px; text-align: right; }
-                .a4-totals-table { width: 200px; margin-left: auto; font-size: 8px; }
-                .a4-totals-table td { padding: 2px; }
-                .a4-grand-total { font-weight: 800; font-size: 10px; border-top: 1px solid #DC143C; color: #DC143C; }
-                .a4-signature { position: absolute; bottom: 8px; left: 12px; text-align: left; }
-                .signature-line { border-top: 1px solid #333; width: 120px; margin-bottom: 4px; }
-                .signature-label { font-size: 8px; color: #666; }
-                .invoice-section-2 { height: 99mm; border-bottom: 1px dashed #ccc; page-break-inside: avoid; background: white; }
-                .invoice-section-3 { height: 99mm; page-break-inside: avoid; background: white; }
-                @media print { body { margin: 0; padding: 0; } }
-            </style>
-        </head>
-        <body>
-            <div class="a4-invoice">
-                ${invoiceHTML}
-            </div>
-            <script>
-                window.onload = function() {
-                    window.print();
-                    setTimeout(function() { window.close(); }, 500);
-                }
-            <\/script>
-        </body>
-        </html>
-    `);
+async function printInvoice() {
+    previewInvoice();
+    const data = getInvoiceData();
+    const absoluteLogoUrl = new URL(window.UTA_LOGO_URL || '/static/invoice_logo.png', window.location.origin).href;
+    const receiptHTML = generateReceiptHTML(data, absoluteLogoUrl);
+    const stylesheets = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(link => `<link rel="stylesheet" href="${link.href}">`).join('');
+
+    const printWindow = window.open('', '_blank', 'width=1100,height=820');
+    if (!printWindow) { showInvoiceToast('Please allow pop-ups to print the invoice.', 'error'); return; }
+
+    printWindow.document.open();
+    printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Invoice - ${escapeHtml(data.invoiceNo || '')}</title>${stylesheets}<style>
+        @page { size: A4 portrait; margin: 0; }
+        html, body { width:210mm!important; min-width:210mm!important; height:297mm!important; margin:0!important; padding:0!important; background:#fff!important; overflow:visible!important; }
+        body { font-family:'Inter',Arial,sans-serif!important; }
+        body *, .print-sheet, .print-sheet * { visibility:visible!important; }
+        .print-sheet { display:block!important; position:static!important; width:210mm!important; height:297mm!important; margin:0!important; padding:0!important; background:#fff!important; }
+        .print-sheet .uta-receipt { display:block!important; position:relative!important; width:210mm!important; height:99mm!important; margin:0!important; box-shadow:none!important; border-left:none!important; border-right:none!important; border-top:none!important; }
+        @media print { html,body,.print-sheet{width:210mm!important;height:297mm!important;margin:0!important;padding:0!important;} body *, .print-sheet, .print-sheet *{visibility:visible!important;} .print-sheet .uta-receipt{width:210mm!important;height:99mm!important;page-break-inside:avoid!important;break-inside:avoid!important;} }
+    </style></head><body><div class="print-sheet">${receiptHTML}</div></body></html>`);
     printWindow.document.close();
+
+    const runPrint = async () => {
+        try {
+            const images = Array.from(printWindow.document.images || []);
+            await Promise.all(images.map(img => img.complete ? Promise.resolve() : new Promise(resolve => {
+                img.addEventListener('load', resolve, { once: true });
+                img.addEventListener('error', resolve, { once: true });
+            })));
+            if (printWindow.document.fonts?.ready) await printWindow.document.fonts.ready;
+        } catch (error) { console.warn(error); }
+        printWindow.focus();
+        setTimeout(() => printWindow.print(), 250);
+    };
+
+    if (printWindow.document.readyState === 'complete') runPrint();
+    else printWindow.addEventListener('load', runPrint, { once: true });
 }
 
-// Initial preview
-setTimeout(() => {
-    previewInvoice();
-}, 100);
+initializeInvoicePage();

@@ -1,75 +1,276 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<title>Candidate Dashboard - UTA Candidate Management</title>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='candidate_management.css') }}">
+    <title>Candidate Dashboard - UTA Manpower Service</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='candidate_dashboard.css') }}">
 </head>
 <body>
 <div class="dashboard-container">
-<aside class="sidebar">
-<div class="logo">
-<div class="logo-icon"><img src="{{ url_for('static', filename='logo.png') }}" alt="UTA Logo"></div>
-<h2>UTA</h2><p>Manpower Service</p><span class="license-badge">SLBFE Licensed</span>
-</div>
-<nav class="nav-menu">
-<a href="{{ url_for('candidate_dashboard') }}" class="nav-item active"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
-<a href="{{ url_for('candidate_invoice') }}" class="nav-item"><i class="fas fa-file-invoice"></i><span>Invoice</span></a>
-<a href="{{ url_for('logout') }}" class="nav-item"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
-</nav>
-</aside>
+    <aside class="sidebar">
+        <div class="logo">
+            <div class="logo-icon"><img src="{{ url_for('static', filename='logo.png') }}" alt="UTA Logo"></div>
+            <h2>UTA</h2>
+            <p>Manpower Service</p>
+            <span class="license-badge">SLBFE Licensed</span>
+        </div>
 
-<main class="main-content">
-<header class="header">
-<div class="header-title">
-<h1>Candidate Dashboard</h1>
-<p>Manage invoices from one secure workspace.</p>
-</div>
-<div class="header-actions">
-<div class="date-display"><i class="fas fa-calendar-alt"></i><span>{{ current_date }}</span></div>
-<div class="candidate-system-badge"><i class="fas fa-users"></i> Candidate System</div>
-</div>
-</header>
+        <nav class="nav-menu">
+            <a href="{{ url_for('candidate_dashboard') }}" class="nav-item active">
+                <i class="fas fa-chart-line"></i><span>Dashboard</span>
+            </a>
+            <a href="{{ url_for('candidate_invoice') }}" class="nav-item">
+                <i class="fas fa-file-invoice"></i><span>Invoice</span>
+            </a>
+            <a href="{{ url_for('logout') }}" class="nav-item">
+                <i class="fas fa-sign-out-alt"></i><span>Logout</span>
+            </a>
+        </nav>
+    </aside>
 
-<section class="candidate-dashboard-hero">
-<div>
-<span class="section-kicker">UTA CANDIDATE MANAGEMENT</span>
-<h2>Welcome, {{ current_user_profile.name }}</h2>
-<p>Create, preview, save, print and manage invoices from one secure workspace.</p>
-</div>
-<a href="{{ url_for('candidate_invoice') }}" class="candidate-btn primary">
-<i class="fas fa-file-invoice"></i> Create Invoice
-</a>
-</section>
+    <main class="main-content candidate-dashboard-page">
+        <header class="candidate-topbar">
+            <div class="candidate-heading">
+                <span class="candidate-eyebrow">UTA CANDIDATE WORKSPACE</span>
+                <h1>Dashboard</h1>
+                <p>Create, save and print professional payment invoices from one secure workspace.</p>
+            </div>
 
-<section class="candidate-dashboard-grid">
-<div class="candidate-records-card">
-<div class="candidate-records-header">
-<div>
-<h2><i class="fas fa-file-invoice-dollar"></i> Invoice Management</h2>
-<p>Create and manage candidate invoices efficiently.</p>
-</div>
-</div>
-<div class="candidate-empty-mini" style="padding:42px 24px;">
-<i class="fas fa-receipt"></i>
-<p style="margin-bottom:14px;">Use the Invoice page to create new invoices and review saved invoices.</p>
-<a href="{{ url_for('candidate_invoice') }}" class="candidate-btn primary">
-<i class="fas fa-arrow-right"></i> Open Invoice Management
-</a>
-</div>
-</div>
+            <div class="candidate-topbar-right">
+                <div class="date-display candidate-date">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>{{ current_date }}</span>
+                </div>
 
-<div class="candidate-quick-card">
-<h2><i class="fas fa-bolt"></i> Quick Actions</h2>
-<a href="{{ url_for('candidate_invoice') }}"><i class="fas fa-file-circle-plus"></i><span>Create Invoice</span><i class="fas fa-arrow-right"></i></a>
-<a href="{{ url_for('candidate_invoice') }}"><i class="fas fa-clock-rotate-left"></i><span>Recent Invoices</span><i class="fas fa-arrow-right"></i></a>
+                <div class="candidate-user-card">
+                    <img src="{{ url_for('static', filename=current_user_profile.photo) }}" alt="{{ current_user_profile.name }}">
+                    <div>
+                        <strong>{{ current_user_profile.name }}</strong>
+                        <span>{{ current_user_profile.role }}</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <section class="candidate-welcome-card">
+            <div class="candidate-welcome-copy">
+                <div class="candidate-welcome-icon"><i class="fas fa-file-invoice-dollar"></i></div>
+                <div>
+                    <span class="candidate-section-label">INVOICE WORKSPACE</span>
+                    <h2>Welcome back, {{ current_user_profile.name }}</h2>
+                    <p>Create a compact A4 one-third receipt, save it securely and keep track of your latest invoices here.</p>
+                </div>
+            </div>
+
+            <a href="{{ url_for('candidate_invoice') }}" class="candidate-primary-action">
+                <i class="fas fa-plus"></i>
+                <span>Create Invoice</span>
+            </a>
+        </section>
+
+        <section class="candidate-stats-grid">
+            <div class="candidate-stat-card">
+                <div class="candidate-stat-icon red"><i class="fas fa-file-invoice"></i></div>
+                <div>
+                    <span>Total Invoices</span>
+                    <strong>{{ total_invoices }}</strong>
+                </div>
+            </div>
+
+            <div class="candidate-stat-card">
+                <div class="candidate-stat-icon blue"><i class="fas fa-calendar-day"></i></div>
+                <div>
+                    <span>Today's Invoices</span>
+                    <strong>{{ today_invoices }}</strong>
+                </div>
+            </div>
+
+            <div class="candidate-stat-card">
+                <div class="candidate-stat-icon gold"><i class="fas fa-sack-dollar"></i></div>
+                <div>
+                    <span>Total Invoice Value</span>
+                    <strong>Rs. {{ total_invoice_value|amount }}</strong>
+                </div>
+            </div>
+        </section>
+
+        <section class="candidate-dashboard-content-grid">
+            <div class="candidate-saved-card">
+                <div class="candidate-saved-header">
+                    <div>
+                        <span class="candidate-section-label">SAVED INVOICES</span>
+                        <h2>Latest Invoices</h2>
+                        <p>Invoices saved from the Invoice page appear here automatically.</p>
+                    </div>
+                    <a href="{{ url_for('candidate_invoice') }}" class="candidate-small-action">
+                        <i class="fas fa-plus"></i> New Invoice
+                    </a>
+                </div>
+
+                {% if recent_invoices %}
+                <div class="candidate-invoice-table-wrap">
+                    <table class="candidate-invoice-table">
+                        <thead>
+                            <tr>
+                                <th>Invoice No.</th>
+                                <th>Client</th>
+                                <th>Date</th>
+                                <th>Destination</th>
+                                <th>Amount</th>
+                                <th class="invoice-actions-heading">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for invoice in recent_invoices %}
+                            <tr>
+                                <td><strong>{{ invoice.invoiceNo or '-' }}</strong></td>
+                                <td>{{ invoice.clientName or '-' }}</td>
+                                <td>{{ invoice.date or '-' }}</td>
+                                <td>{{ invoice.destination or '-' }}</td>
+                                <td class="invoice-amount">Rs. {{ (invoice.grandTotal or 0)|amount }}</td>
+                                <td class="invoice-actions-cell">
+                                    <button type="button"
+                                            class="invoice-action-btn edit"
+                                            data-invoice-id="{{ invoice.id }}"
+                                            data-edit-url="{{ url_for('candidate_invoice') }}"
+                                            onclick="editDashboardInvoice(this)"
+                                            title="Edit invoice">
+                                        <i class="fas fa-pen"></i><span>Edit</span>
+                                    </button>
+                                    <button type="button"
+                                            class="invoice-action-btn delete"
+                                            data-invoice-id="{{ invoice.id }}"
+                                            onclick="deleteDashboardInvoice(this)"
+                                            title="Delete invoice">
+                                        <i class="fas fa-trash"></i><span>Delete</span>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="candidate-empty-invoices">
+                    <div class="candidate-empty-icon"><i class="fas fa-file-circle-plus"></i></div>
+                    <h3>No invoices saved yet</h3>
+                    <p>Create your first invoice and it will appear here.</p>
+                    <a href="{{ url_for('candidate_invoice') }}" class="candidate-primary-action">
+                        <i class="fas fa-plus"></i> Create Invoice
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+
+            <aside class="candidate-side-card">
+                <span class="candidate-section-label">QUICK ACTION</span>
+                <h2>Create a payment invoice</h2>
+                <p>Enter payment details, preview the receipt, save it and print it in A4 one-third format.</p>
+                <a href="{{ url_for('candidate_invoice') }}" class="candidate-secondary-action">
+                    Open Invoice Management <i class="fas fa-arrow-right"></i>
+                </a>
+
+                <div class="candidate-format-note">
+                    <i class="fas fa-print"></i>
+                    <div>
+                        <strong>Print Size</strong>
+                        <span>210 mm × 99 mm</span>
+                    </div>
+                </div>
+            </aside>
+        </section>
+    </main>
 </div>
-</section>
-</main>
+<div id="deleteInvoiceModal" class="invoice-confirm-overlay" aria-hidden="true">
+    <div class="invoice-confirm-card" role="dialog" aria-modal="true" aria-labelledby="deleteInvoiceTitle">
+        <div class="invoice-confirm-icon"><i class="fas fa-trash"></i></div>
+        <div class="invoice-confirm-copy">
+            <h3 id="deleteInvoiceTitle">Delete invoice?</h3>
+            <p>This invoice will be permanently removed.</p>
+        </div>
+        <div class="invoice-confirm-actions">
+            <button type="button" class="invoice-confirm-btn cancel" onclick="closeDeleteInvoicePopup()">Cancel</button>
+            <button type="button" id="confirmDeleteInvoiceBtn" class="invoice-confirm-btn delete" onclick="confirmDeleteInvoice()">Delete</button>
+        </div>
+    </div>
 </div>
+<div id="dashboardToast" class="dashboard-toast" role="status" aria-live="polite"></div>
+<script>
+function showDashboardToast(message, type = 'success') {
+    const toast = document.getElementById('dashboardToast');
+    toast.textContent = message;
+    toast.className = `dashboard-toast show ${type}`;
+    clearTimeout(window.dashboardToastTimer);
+    window.dashboardToastTimer = setTimeout(() => {
+        toast.className = 'dashboard-toast';
+    }, 2200);
+}
+
+function editDashboardInvoice(button) {
+    const invoiceId = button.dataset.invoiceId;
+    const editUrl = button.dataset.editUrl;
+    window.location.href = `${editUrl}?edit=${encodeURIComponent(invoiceId)}`;
+}
+
+let pendingDeleteInvoiceButton = null;
+
+function deleteDashboardInvoice(button) {
+    pendingDeleteInvoiceButton = button;
+    const modal = document.getElementById('deleteInvoiceModal');
+    modal.classList.add('show');
+    modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeDeleteInvoicePopup() {
+    const modal = document.getElementById('deleteInvoiceModal');
+    modal.classList.remove('show');
+    modal.setAttribute('aria-hidden', 'true');
+    pendingDeleteInvoiceButton = null;
+}
+
+async function confirmDeleteInvoice() {
+    const button = pendingDeleteInvoiceButton;
+    if (!button) return;
+
+    const invoiceId = button.dataset.invoiceId;
+    const confirmButton = document.getElementById('confirmDeleteInvoiceBtn');
+    confirmButton.disabled = true;
+    button.disabled = true;
+
+    try {
+        const response = await fetch(`/api/candidate/invoices/${invoiceId}`, { method: 'DELETE' });
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            showDashboardToast(data.message || 'Unable to delete invoice.', 'error');
+            button.disabled = false;
+            confirmButton.disabled = false;
+            return;
+        }
+
+        closeDeleteInvoicePopup();
+        showDashboardToast('Invoice deleted', 'success');
+        setTimeout(() => window.location.reload(), 650);
+    } catch (error) {
+        console.error(error);
+        showDashboardToast('Unable to delete invoice.', 'error');
+        button.disabled = false;
+    } finally {
+        confirmButton.disabled = false;
+    }
+}
+
+document.getElementById('deleteInvoiceModal').addEventListener('click', function (event) {
+    if (event.target === this) closeDeleteInvoicePopup();
+});
+
+document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') closeDeleteInvoicePopup();
+});
+</script>
 </body>
 </html>
