@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monthly Salary Slip - UTA Manpower Service</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='candidate_salary_slip.css') }}">
+</head>
+<body>
+<div class="dashboard-container">
+    <aside class="sidebar">
+        <div class="logo">
+            <div class="logo-icon"><img src="{{ url_for('static', filename='logo.png') }}" alt="UTA Logo"></div>
+            <h2>UTA</h2>
+            <p>Manpower Service</p>
+            <span class="license-badge">SLBFE Licensed</span>
+        </div>
+        <nav class="nav-menu">
+            <a href="{{ url_for('candidate_dashboard') }}" class="nav-item"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+            <a href="{{ url_for('candidate_invoice') }}" class="nav-item"><i class="fas fa-file-invoice"></i><span>Invoice</span></a>
+            <a href="{{ url_for('candidate_salary_slip') }}" class="nav-item active"><i class="fas fa-file-signature"></i><span>Salary Slip</span></a>
+            <a href="{{ url_for('logout') }}" class="nav-item"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+        </nav>
+    </aside>
+
+    <main class="main-content salary-slip-page">
+        <header class="salary-topbar">
+            <div class="salary-page-heading">
+                <span class="salary-eyebrow">UTA CANDIDATE WORKSPACE</span>
+                <h1>Monthly Salary Slip</h1>
+                <p>Create, save, edit and print A5 landscape salary payment slips.</p>
+            </div>
+            <div class="salary-topbar-right">
+                <div class="date-display salary-date-display"><i class="fas fa-calendar-alt"></i><span>{{ current_date }}</span></div>
+                <div class="candidate-user-card">
+                    <img src="{{ url_for('static', filename=current_user_profile.photo) }}" alt="{{ current_user_profile.name }}">
+                    <div><strong>{{ current_user_profile.name }}</strong><span>{{ current_user_profile.role }}</span></div>
+                </div>
+            </div>
+        </header>
+
+        <div class="salary-app">
+            <section class="salary-form-card">
+                <div class="salary-card-heading">
+                    <div class="salary-heading-icon"><i class="fas fa-money-check-dollar"></i></div>
+                    <div>
+                        <h2 id="salaryFormTitle">Create Salary Slip</h2>
+                        <p>Enter staff and salary details. The print preview updates automatically.</p>
+                    </div>
+                </div>
+
+                <div class="form-grid">
+                    <div class="field-group">
+                        <label><i class="fas fa-user"></i> Full Name</label>
+                        <input type="text" id="employeeName" placeholder="Enter employee full name" oninput="updateSalaryPreview()">
+                    </div>
+                    <div class="field-group">
+                        <label><i class="fas fa-id-card"></i> N.I.C. No.</label>
+                        <input type="text" id="employeeNic" placeholder="Enter NIC number" oninput="updateSalaryPreview()">
+                    </div>
+                    <div class="field-group full-width">
+                        <label><i class="fas fa-location-dot"></i> Full Address</label>
+                        <input type="text" id="employeeAddress" placeholder="Enter full address" oninput="updateSalaryPreview()">
+                    </div>
+                    <div class="field-group">
+                        <label><i class="fas fa-calendar-day"></i> Date</label>
+                        <input type="date" id="salaryDate" onchange="updateSalaryPreview()">
+                    </div>
+                    <div class="field-group">
+                        <label><i class="fas fa-calendar"></i> Salary Month</label>
+                        <input type="month" id="salaryMonth" onchange="updateSalaryPreview()">
+                    </div>
+                </div>
+
+                <div class="salary-items-heading">
+                    <div><h3><i class="fas fa-list"></i> Salary Details</h3><p>Add salary/payment items.</p></div>
+                    <button type="button" class="add-item-btn" onclick="addSalaryItem()"><i class="fas fa-plus"></i> Add Item</button>
+                </div>
+
+                <div class="salary-table-wrap">
+                    <table class="salary-entry-table">
+                        <thead><tr><th>Description</th><th>Amount (LKR)</th><th></th></tr></thead>
+                        <tbody id="salaryItemsBody"></tbody>
+                    </table>
+                </div>
+
+                <div class="salary-total-strip"><span>Total Amount</span><strong id="formSalaryTotal">LKR 0</strong></div>
+
+                <div class="form-actions">
+                    <button type="button" class="secondary-btn" onclick="resetSalarySlip()"><i class="fas fa-rotate-left"></i> Reset</button>
+                    <button type="button" class="preview-btn" onclick="updateSalaryPreview()"><i class="fas fa-eye"></i> Preview</button>
+                    <button type="button" id="saveSalarySlipBtn" class="primary-btn" onclick="saveSalarySlip()">
+                        <i class="fas fa-floppy-disk"></i> <span id="saveSalarySlipText">Save Salary Slip</span>
+                    </button>
+                </div>
+            </section>
+
+            <section class="salary-preview-card">
+                <div class="preview-heading">
+                    <div><span class="salary-eyebrow">PRINT PREVIEW</span><h2>A5 Landscape Salary Slip</h2><p>Half of an A4 sheet · actual print size 210 mm × 148 mm.</p></div>
+                    <button type="button" class="print-btn" onclick="printSalarySlip()"><i class="fas fa-print"></i> Print Salary Slip</button>
+                </div>
+
+                <div class="salary-preview-area">
+                    <div id="salarySlip" class="salary-slip">
+                        <div class="slip-header">
+                            <div class="slip-logo-box"><img src="{{ url_for('static', filename='invoice_logo.png') }}" alt="UTA Logo" class="slip-logo"></div>
+                            <div class="company-details">
+                                <h1>U.T.A MANPOWER SERVICE</h1>
+                                <p>557, Main Street Kalmunaikudy - 14, Kalmunai</p>
+                                <p>TEL: 067 2220210 &nbsp;&nbsp; FAX: 067 2220210</p>
+                                <p>E-mail: utamservice@yahoo.com</p>
+                                <strong>SLBFE Licence No. 2179</strong>
+                            </div>
+                        </div>
+
+                        <div class="employee-section">
+                            <div class="employee-details">
+                                <div class="employee-line"><span>Full Name :</span><strong id="previewName">—</strong></div>
+                                <div class="employee-line"><span>Full Address :</span><strong id="previewAddress">—</strong></div>
+                                <div class="employee-line"><span>N.I.C. No :</span><strong id="previewNic">—</strong></div>
+                            </div>
+                            <div class="salary-date"><span>Date:</span><strong id="previewDate">—</strong></div>
+                        </div>
+
+                        <div class="salary-slip-title">SALARY PAYMENT SLIP</div>
+
+                        <table class="print-salary-table">
+                            <thead><tr><th>No.</th><th>Subject</th><th>Amount</th></tr></thead>
+                            <tbody id="previewSalaryItems"></tbody>
+                            <tfoot><tr><td colspan="2">Total Amount</td><td id="previewTotal">0.00</td></tr></tfoot>
+                        </table>
+
+                        <div class="salary-month-line">Salary Month: <strong id="previewMonth">—</strong></div>
+
+                        <div class="signature-section">
+                            <div class="signature-box"><div class="signature-space"></div><div class="signature-line"></div><strong>Authorized Signature</strong><span>Director</span></div>
+                            <div class="stamp-space"><span>Official Stamp</span></div>
+                            <div class="signature-box"><div class="signature-space"></div><div class="signature-line"></div><strong>Staff Signature</strong></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="salary-history-card">
+                <div class="salary-history-heading">
+                    <div><span class="salary-eyebrow">SAVED SALARY SLIPS</span><h2>Salary Slip History</h2><p>Saved salary slips can be edited, printed again or deleted.</p></div>
+                    <button type="button" class="new-slip-btn" onclick="resetSalarySlip()"><i class="fas fa-plus"></i> New Salary Slip</button>
+                </div>
+                <div class="salary-history-table-wrap">
+                    <table class="salary-history-table">
+                        <thead><tr><th>Slip No.</th><th>Employee</th><th>Salary Month</th><th>Date</th><th>Amount</th><th>Actions</th></tr></thead>
+                        <tbody id="salaryHistoryBody"></tbody>
+                    </table>
+                    <div id="salaryHistoryEmpty" class="salary-history-empty">
+                        <i class="fas fa-file-circle-plus"></i><strong>No salary slips saved yet</strong><span>Your saved salary slips will appear here.</span>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+</div>
+
+<div id="salaryDeleteModal" class="salary-confirm-overlay" aria-hidden="true">
+    <div class="salary-confirm-card" role="dialog" aria-modal="true" aria-labelledby="salaryDeleteTitle">
+        <div class="salary-confirm-icon"><i class="fas fa-trash"></i></div>
+        <h3 id="salaryDeleteTitle">Delete salary slip?</h3>
+        <p>This salary slip will be permanently removed.</p>
+        <div class="salary-confirm-actions">
+            <button type="button" class="salary-confirm-btn cancel" onclick="closeSalaryDeleteModal()">Cancel</button>
+            <button type="button" id="confirmSalaryDeleteBtn" class="salary-confirm-btn delete" onclick="confirmDeleteSalarySlip()">Delete</button>
+        </div>
+    </div>
+</div>
+<div id="salaryToast" class="salary-toast" role="status" aria-live="polite"></div>
+<script src="{{ url_for('static', filename='candidate_salary_slip.js') }}"></script>
+</body>
+</html>

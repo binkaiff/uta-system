@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice Management - UTA Manpower Service</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='candidate_invoice.css') }}">
+</head>
+<body>
+<div class="dashboard-container">
+    <aside class="sidebar">
+        <div class="logo">
+            <div class="logo-icon"><img src="{{ url_for('static', filename='logo.png') }}" alt="UTA Logo"></div>
+            <h2>UTA</h2>
+            <p>Manpower Service</p>
+            <span class="license-badge">SLBFE Licensed</span>
+        </div>
+
+        <nav class="nav-menu">
+            <a href="{{ url_for('candidate_dashboard') }}" class="nav-item">
+                <i class="fas fa-chart-line"></i><span>Dashboard</span>
+            </a>
+            <a href="{{ url_for('candidate_invoice') }}" class="nav-item active">
+                <i class="fas fa-file-invoice"></i><span>Invoice</span>
+            </a>
+            <a href="{{ url_for('candidate_salary_slip') }}" class="nav-item">
+                <i class="fas fa-file-signature"></i><span>Salary Slip</span>
+            </a>
+            <a href="{{ url_for('logout') }}" class="nav-item">
+                <i class="fas fa-sign-out-alt"></i><span>Logout</span>
+            </a>
+        </nav>
+    </aside>
+
+    <main class="main-content invoice-page">
+        <header class="invoice-topbar">
+            <div class="invoice-page-heading">
+                <span class="invoice-eyebrow">UTA CANDIDATE WORKSPACE</span>
+                <h1>Invoice Management</h1>
+                <p>Create a professional receipt and print it in A4 one-third size.</p>
+            </div>
+
+            <div class="invoice-topbar-right">
+                <div class="date-display invoice-date">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>{{ current_date }}</span>
+                </div>
+
+                <div class="candidate-user-card">
+                    <img src="{{ url_for('static', filename=current_user_profile.photo) }}" alt="{{ current_user_profile.name }}">
+                    <div>
+                        <strong>{{ current_user_profile.name }}</strong>
+                        <span>{{ current_user_profile.role }}</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="invoice-app">
+            <section class="invoice-form-card">
+                <div class="invoice-card-heading">
+                    <div class="invoice-heading-icon"><i class="fas fa-file-invoice"></i></div>
+                    <div>
+                        <h2 id="invoiceFormTitle">Create New Invoice</h2>
+                        <p>Enter payment details below. The receipt preview updates when you select Preview.</p>
+                    </div>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label><i class="fas fa-hashtag"></i> Invoice No.</label>
+                        <input type="text" id="invNumber" class="form-control" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-calendar"></i> Date</label>
+                        <input type="date" id="invDate" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-user"></i> Client Name</label>
+                        <input type="text" id="clientName" class="form-control" placeholder="Enter client name">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-passport"></i> Passport No.</label>
+                        <input type="text" id="passportNo" class="form-control" placeholder="Enter passport number">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-earth-asia"></i> Destination</label>
+                        <input type="text" id="destination" class="form-control" placeholder="Enter destination country">
+                    </div>
+                </div>
+
+                <div class="items-section">
+                    <div class="items-heading-row">
+                        <div>
+                            <h3><i class="fas fa-receipt"></i> Payment Details</h3>
+                            <p>Add the service or payment description and amount.</p>
+                        </div>
+                        <button type="button" class="add-item-btn" onclick="addItem()">
+                            <i class="fas fa-plus"></i> Add Item
+                        </button>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="items-table">
+                            <thead>
+                                <tr>
+                                    <th>Description</th>
+                                    <th>Qty</th>
+                                    <th>Unit Price (LKR)</th>
+                                    <th>Total (LKR)</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="itemsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="invoice-total-strip">
+                    <span>Total Amount</span>
+                    <strong id="grandTotal">LKR 0</strong>
+                    <span id="subtotal" class="hidden-total">LKR 0</span>
+                    <span id="vat" class="hidden-total">LKR 0</span>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="resetForm()">
+                        <i class="fas fa-rotate-left"></i> Reset
+                    </button>
+                    <button type="button" class="btn-secondary preview-action" onclick="previewInvoice()">
+                        <i class="fas fa-eye"></i> Preview
+                    </button>
+                    <button type="button" class="btn-primary" id="saveInvoiceBtn" onclick="saveInvoice()">
+                        <i class="fas fa-floppy-disk"></i> <span id="saveInvoiceText">Save Invoice</span>
+                    </button>
+                </div>
+            </section>
+
+            <section class="receipt-preview-card">
+                <div class="receipt-preview-header">
+                    <div>
+                        <span class="invoice-eyebrow">PRINT PREVIEW</span>
+                        <h2>A4 One-third Receipt</h2>
+                        <p>Actual print size: 210 mm × 99 mm.</p>
+                    </div>
+                    <button type="button" class="print-btn" onclick="printInvoice()">
+                        <i class="fas fa-print"></i> Print Invoice
+                    </button>
+                </div>
+
+                <div class="receipt-preview-stage">
+                    <div id="a4Content" class="receipt-preview-content"></div>
+                </div>
+            </section>
+        </div>
+    </main>
+</div>
+
+<div id="invoiceToast" class="invoice-toast" role="status" aria-live="polite"></div>
+
+<script>
+window.UTA_LOGO_URL = "{{ url_for('static', filename='invoice_logo.png') }}";
+</script>
+<script src="{{ url_for('static', filename='candidate_invoice.js') }}"></script>
+</body>
+</html>

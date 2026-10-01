@@ -1138,107 +1138,47 @@ body {
 }
 
 /* Filter Bar */
-.filter-bar {
-    background: white;
-    border-radius: 16px;
-    padding: 20px;
-    margin-bottom: 25px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-}
-
-.filter-title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 15px;
-    padding-bottom: 12px;
-    border-bottom: 2px solid #f0f0f0;
-}
-
-.filter-title i {
-    font-size: 18px;
-    color: #DC143C;
-}
-
-.filter-title span {
-    font-size: 16px;
-    font-weight: 600;
-    color: #1a1a2e;
-}
-
-.filter-controls {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 15px;
-    align-items: flex-end;
-}
-
-.filter-input-group {
-    flex: 1;
-    min-width: 160px;
-}
-
-.filter-input-group label {
-    display: block;
-    font-size: 12px;
-    font-weight: 600;
-    color: #666;
-    margin-bottom: 6px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.filter-input-group label i {
-    margin-right: 5px;
-    font-size: 11px;
-}
-
-.filter-field {
-    width: 100%;
-    padding: 10px 12px;
-    border: 2px solid #eef2f6;
-    border-radius: 10px;
-    font-size: 14px;
-    transition: all 0.3s ease;
-    background: #fafbfc;
-}
-
-.filter-field:focus {
-    outline: none;
-    border-color: #DC143C;
-    background: white;
-}
-
-.filter-actions {
-    display: flex;
-    gap: 10px;
-}
-
-.btn-apply-filter, .btn-reset-filter {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 10px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-}
-
-.btn-apply-filter {
-    background: linear-gradient(135deg, #DC143C, #8B0000);
-    color: white;
-}
-
-.btn-reset-filter {
-    background: #6c757d;
-    color: white;
-}
-
-.btn-apply-filter:hover, .btn-reset-filter:hover {
-    transform: translateY(-2px);
+.filter-bar { background:#fff; border:1px solid #e6eaf0; border-radius:16px; padding:20px; margin-bottom:25px; box-shadow:0 4px 14px rgba(31,39,67,.045); }
+.filter-title { display:flex; align-items:center; justify-content:space-between; gap:15px; margin-bottom:18px; padding-bottom:14px; border-bottom:1px solid #edf0f4; }
+.filter-title-main { display:flex; align-items:center; gap:11px; min-width:0; }
+.filter-title-main > i { width:36px; height:36px; flex:0 0 36px; border-radius:10px; display:flex; align-items:center; justify-content:center; background:#fff0f3; color:#d91b40; font-size:15px; }
+.filter-title-main > div { min-width:0; }
+.filter-title-main span { display:block; color:#1a1a2e; font-size:16px; font-weight:700; line-height:1.2; }
+.filter-title-main small { display:block; margin-top:4px; color:#8a94a6; font-size:11px; font-weight:500; }
+.filter-active-indicator { flex:0 0 auto; display:inline-flex; align-items:center; gap:7px; min-height:32px; padding:6px 11px; border:1px solid #e2e6ed; border-radius:999px; background:#f7f9fb; color:#697386; font-size:11px; font-weight:700; white-space:nowrap; }
+.filter-active-indicator.active { background:#fff0f3; border-color:#f2cbd3; color:#c91839; }
+.filter-range-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.filter-range-card { padding:14px; border:1px solid #e7ebf1; border-radius:13px; background:#fbfcfe; }
+.filter-range-heading { display:flex; align-items:center; gap:8px; margin-bottom:11px; color:#344054; font-size:12px; font-weight:800; }
+.filter-range-heading i { color:#d91b40; }
+.filter-range-fields { display:grid; grid-template-columns:minmax(0,1fr) 28px minmax(0,1fr); gap:8px; align-items:end; }
+.filter-range-arrow { height:42px; display:flex; align-items:center; justify-content:center; color:#98a2b3; font-size:11px; }
+.filter-input-group { min-width:0; }
+.filter-input-group label { display:block; margin-bottom:6px; color:#667085; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.45px; }
+.filter-input-group label i { margin-right:5px; font-size:10px; color:#d91b40; }
+.filter-field { width:100%; min-height:42px; padding:9px 11px; border:1.5px solid #dfe4ec; border-radius:9px; background:#fff; color:#273142; font-family:inherit; font-size:13px; transition:border-color .2s ease, box-shadow .2s ease, background .2s ease; }
+.filter-field::placeholder { color:#a5adba; }
+.filter-field:hover { border-color:#cfd5df; }
+.filter-field:focus { outline:none; border-color:#d91b40; background:#fff; box-shadow:0 0 0 3px rgba(217,27,64,.08); }
+.filter-bottom-row { display:flex; align-items:flex-end; gap:14px; margin-top:14px; }
+.filter-subject-group { flex:1 1 auto; }
+.filter-optional { margin-left:5px; padding:2px 6px; border-radius:999px; background:#eef1f5; color:#8a94a6; font-size:8px; font-weight:700; text-transform:none; letter-spacing:0; }
+.filter-actions { flex:0 0 auto; display:flex; gap:8px; }
+.btn-apply-filter, .btn-reset-filter { min-height:42px; padding:9px 17px; border-radius:9px; font-family:inherit; font-size:12px; font-weight:700; cursor:pointer; transition:all .2s ease; display:inline-flex; align-items:center; justify-content:center; gap:7px; white-space:nowrap; }
+.btn-apply-filter { border:1px solid #d91b40; background:linear-gradient(135deg,#d91b40,#b51030); color:#fff; box-shadow:0 4px 10px rgba(217,27,64,.16); }
+.btn-reset-filter { border:1px solid #d8dee8; background:#fff; color:#596579; }
+.btn-apply-filter:hover { transform:translateY(-1px); box-shadow:0 6px 14px rgba(217,27,64,.22); }
+.btn-reset-filter:hover { background:#f7f9fb; color:#2f3949; transform:translateY(-1px); }
+@media (max-width:1000px) { .filter-range-grid { grid-template-columns:1fr; } }
+@media (max-width:700px) {
+    .filter-bar { padding:16px; }
+    .filter-title { align-items:flex-start; flex-direction:column; }
+    .filter-range-fields { grid-template-columns:1fr; }
+    .filter-range-arrow { display:none; }
+    .filter-bottom-row { flex-direction:column; align-items:stretch; }
+    .filter-subject-group, .filter-actions { width:100%; }
+    .filter-actions { display:grid; grid-template-columns:1fr 1fr; }
+    .btn-apply-filter, .btn-reset-filter { width:100%; }
 }
 
 /* Records Table */
@@ -1660,23 +1600,29 @@ body {
     animation: cardAppear 0.3s ease;
 }
 
-/* Scrollbar */
+/* Scrollbar - stable page width across record type filters */
+html {
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
+    scrollbar-color: #c8ced8 #f5f7fb;
+}
+
 ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-    background: #f1f1f1;
+    background: #f5f7fb;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #DC143C;
-    border-radius: 4px;
+    background: #c8ced8;
+    border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #8B0000;
+    background: #aeb6c3;
 }
 
 /* Responsive */
@@ -2495,6 +2441,18 @@ button, input, select, textarea {
         max-height: 86vh;
         overflow-y: auto;
     }
+}
+
+
+/* Login card width - desktop/tablet */
+.login-container {
+    width: 100%;
+    max-width: 500px;
+    padding: 20px;
+}
+
+.login-card {
+    width: 100%;
 }
 
 /* Phones */
@@ -4390,4 +4348,155 @@ button { font-family: inherit; }
 .nav-menu .nav-item:last-child {
     margin-top: auto;
     margin-bottom: 24px;
+}
+
+
+
+
+/* =========================================================
+   VIEW MONTH — RECORD TYPE FILTER INSIDE FILTER CARD
+   ========================================================= */
+.filter-record-type {
+    flex: 0 0 245px;
+    min-width: 220px;
+}
+
+.filter-record-type > label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    color: #667085;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .45px;
+}
+
+.filter-record-type > label i {
+    color: #d91b40;
+    font-size: 10px;
+}
+
+.filter-select-wrap {
+    position: relative;
+}
+
+.filter-type-select {
+    width: 100%;
+    min-height: 40px;
+    padding: 9px 38px 9px 12px;
+    border: 1.5px solid #dfe4ec;
+    border-radius: 10px;
+    background: #ffffff;
+    color: #273142;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+}
+
+.filter-type-select:hover {
+    border-color: #cfd5df;
+}
+
+.filter-type-select:focus {
+    outline: none;
+    border-color: #d91b40;
+    box-shadow: 0 0 0 3px rgba(217, 27, 64, .08);
+}
+
+.filter-select-wrap > i {
+    position: absolute;
+    top: 50%;
+    right: 13px;
+    transform: translateY(-50%);
+    color: #d91b40;
+    font-size: 10px;
+    pointer-events: none;
+}
+
+@media (max-width: 760px) {
+    .filter-title {
+        align-items: stretch;
+    }
+
+    .filter-record-type {
+        width: 100%;
+        min-width: 0;
+        flex-basis: auto;
+    }
+}
+
+
+/* =========================================================
+   CHEQUE DEPOSITS — DIRECT ADD TO EXCEL FROM SAVED LIST
+   ========================================================= */
+.saved-cheque-excel-cell {
+    min-width: 210px;
+}
+
+.saved-cheque-excel-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+}
+
+.saved-excel-add-btn {
+    min-height: 30px;
+    padding: 5px 10px;
+    border: 1px solid #b9dfc4;
+    border-radius: 8px;
+    background: #eef9f1;
+    color: #238542;
+    font-family: inherit;
+    font-size: 10px;
+    font-weight: 750;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .2s ease, border-color .2s ease, color .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+
+.saved-excel-add-btn i {
+    font-size: 10px;
+}
+
+.saved-excel-add-btn:hover:not(:disabled) {
+    background: #249347;
+    border-color: #249347;
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(36, 147, 71, .18);
+}
+
+.saved-excel-add-btn:disabled {
+    cursor: wait;
+    opacity: .72;
+}
+
+.saved-excel-add-btn.loading {
+    min-width: 91px;
+}
+
+@media (max-width: 700px) {
+    .saved-cheque-excel-cell {
+        min-width: 190px;
+    }
+
+    .saved-cheque-excel-actions {
+        gap: 6px;
+    }
+
+    .saved-excel-add-btn {
+        padding: 5px 8px;
+    }
 }

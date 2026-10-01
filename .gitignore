@@ -1,0 +1,11 @@
+.env
+candidate_data/*.json
+__pycache__/
+*.pyc
+candidate_uploads/
+months_data.json
+cheque_deposits.json
+excel_sheets/
+cheque_slips/
+backups/
+deleted_months/

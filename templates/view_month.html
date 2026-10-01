@@ -1,593 +1,1263 @@
 <!DOCTYPE html>
+
 <html lang="en">
+
 <head>
+
     <meta charset="UTF-8">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>UTA Manpower Service - {{ month_data.display_name }} Records</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=7">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=9">
+
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
 </head>
+
 <body>
+
     <div class="dashboard-container">
+
         <div class="sidebar">
+
             <div class="logo">
+
                 <div class="logo-icon">
+
                     <img src="{{ url_for('static', filename='logo.png') }}" alt="UTA Logo" onerror="this.style.display='none'; this.parentElement.innerHTML='<i class=\'fas fa-briefcase\'></i>'">
+
                 </div>
+
                 <h2>UTA</h2>
+
                 <p>Manpower Service</p>
+
                 <div class="license-badge">SLBFE Licensed</div>
+
             </div>
+
             <nav class="nav-menu">
+
                 <a href="/dashboard" class="nav-item">
+
                     <i class="fas fa-chart-line"></i>
+
                     <span>Dashboard</span>
+
                 </a>
+
                 <a href="/enter" class="nav-item">
+
                     <i class="fas fa-plus-circle"></i>
+
                     <span>Enter Records</span>
+
                 </a>
+
                 <a href="/cheque-deposits" class="nav-item">
+
                     <i class="fas fa-money-check-dollar"></i>
+
                     <span>Cheque Deposits</span>
+
                 </a>
+
                 <a href="/view" class="nav-item active">
+
                     <i class="fas fa-table-list"></i>
+
                     <span>View Records</span>
+
                 </a>
+
                 <a href="/backup" class="nav-item">
+
                     <i class="fas fa-box-archive"></i>
+
                     <span>Backup</span>
+
                 </a>
-            
+
                 <a href="/logout" class="nav-item logout-link" onclick="sessionStorage.removeItem('uta_logged_in')">
+
                     <i class="fas fa-sign-out-alt"></i>
+
                     <span>Logout</span>
+
                 </a>
+
             </nav>
+
         </div>
 
+
+
         <div class="main-content">
+
             <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+
             <div class="header">
+
                 <div class="header-title">
+
                     <h1>{{ month_data.display_name }} Records</h1>
+
                     <p>View and manage records for this month</p>
+
                 </div>
+
                 <div class="header-actions">
+
                     <div class="date-display">
+
                         <i class="far fa-calendar-alt"></i>
+
                         <span id="currentDate"></span>
+
                     </div>
+
                     <div class="user-profile" aria-label="Logged in user">
+
                         <img src="{{ url_for('static', filename=current_user_profile.photo) }}" alt="{{ current_user_profile.name }} profile photo" class="user-profile-image">
+
                         <div class="user-profile-details">
+
                             <span class="user-profile-name">{{ current_user_profile.name }}</span>
+
                             <span class="user-profile-role">{{ current_user_profile.role }}</span>
+
                         </div>
+
                     </div>
+
                     <button onclick="downloadMonth()" class="btn-excel">
+
                         <i class="fas fa-file-excel"></i> Export to Excel
+
                     </button>
+
                     <button onclick="goBack()" class="btn-back">
+
                         <i class="fas fa-arrow-left"></i> Back
+
                     </button>
+
                 </div>
+
             </div>
 
+
+
             <!-- Month Stats Cards -->
+
             <div class="month-stats-grid">
+
                 <div class="stat-card-primary">
+
                     <div class="stat-icon-bg">
+
                         <i class="fas fa-folder-open"></i>
+
                     </div>
+
                     <div class="stat-details">
+
                         <span class="stat-label">Total Records</span>
+
                         <span class="stat-number-large" id="totalRecords">0</span>
+
                     </div>
+
                 </div>
+
+
 
                 <div class="stat-card-success">
+
                     <div class="stat-icon-bg">
+
                         <i class="fas fa-chart-line"></i>
+
                     </div>
+
                     <div class="stat-details">
+
                         <span class="stat-label">Opening Balance</span>
+
                         <span class="stat-number-large" id="openingBalance">0</span>
+
                     </div>
+
                 </div>
+
+
 
                 <div class="stat-card-warning">
+
                     <div class="stat-icon-bg">
+
                         <i class="fas fa-chart-line"></i>
+
                     </div>
+
                     <div class="stat-details">
+
                         <span class="stat-label">Closing Balance</span>
+
                         <span class="stat-number-large" id="closingBalance">0</span>
+
                     </div>
+
                 </div>
 
+
+
                 <div class="stat-card-info">
+
                     <div class="stat-icon-bg">
+
                         <i class="fas fa-exchange-alt"></i>
+
                     </div>
+
                     <div class="stat-details">
+
                         <span class="stat-label">Net Change</span>
+
                         <span class="stat-number-large" id="netChange">0</span>
+
                     </div>
+
                 </div>
+
             </div>
 
             <!-- Filter Section -->
-            <div class="filter-bar">
+            <div class="filter-bar" id="transactionFilterBar">
                 <div class="filter-title">
-                    <i class="fas fa-filter"></i>
-                    <span>Filter Records</span>
+                    <div class="filter-title-main">
+                        <i class="fas fa-filter"></i>
+                        <div>
+                            <span>Filter Records</span>
+                            <small>Choose a record type, then use the filters below when needed.</small>
+                        </div>
+                    </div>
+                    <div class="filter-record-type">
+                        <label for="recordTypeFilter"><i class="fas fa-layer-group"></i> Record Type</label>
+                        <div class="filter-select-wrap">
+                            <select id="recordTypeFilter" class="filter-type-select" onchange="setRecordView(this.value)">
+                                <option value="all">All Records</option>
+                                <option value="transactions">Transaction Records</option>
+                                <option value="cheques">Cheque Deposits</option>
+                            </select>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                    </div>
                 </div>
-                <div class="filter-controls">
-                    <div class="filter-input-group">
-                        <label><i class="fas fa-calendar"></i> Date</label>
-                        <input type="date" id="filterDate" class="filter-field" placeholder="Select date">
+
+                <div class="filter-range-grid">
+                    <div class="filter-range-card">
+                        <div class="filter-range-heading">
+                            <i class="fas fa-calendar-days"></i>
+                            <span>Date Range</span>
+                        </div>
+                        <div class="filter-range-fields">
+                            <div class="filter-input-group">
+                                <label for="filterDateFrom">From Date</label>
+                                <input type="date" id="filterDateFrom" class="filter-field">
+                            </div>
+                            <div class="filter-range-arrow" aria-hidden="true"><i class="fas fa-arrow-right"></i></div>
+                            <div class="filter-input-group">
+                                <label for="filterDateTo">To Date</label>
+                                <input type="date" id="filterDateTo" class="filter-field">
+                            </div>
+                        </div>
                     </div>
-                    <div class="filter-input-group">
-                        <label><i class="fas fa-hashtag"></i> Reference No</label>
-                        <input type="text" id="searchRef" class="filter-field" placeholder="UTA-01">
+
+                    <div class="filter-range-card">
+                        <div class="filter-range-heading">
+                            <i class="fas fa-hashtag"></i>
+                            <span>Reference Range</span>
+                        </div>
+                        <div class="filter-range-fields">
+                            <div class="filter-input-group">
+                                <label for="filterRefFrom">From Ref</label>
+                                <input type="text" id="filterRefFrom" class="filter-field" placeholder="UTA-01" autocomplete="off">
+                            </div>
+                            <div class="filter-range-arrow" aria-hidden="true"><i class="fas fa-arrow-right"></i></div>
+                            <div class="filter-input-group">
+                                <label for="filterRefTo">To Ref</label>
+                                <input type="text" id="filterRefTo" class="filter-field" placeholder="UTA-10" autocomplete="off">
+                            </div>
+                        </div>
                     </div>
-                    <div class="filter-input-group">
-                        <label><i class="fas fa-heading"></i> Subject</label>
-                        <input type="text" id="searchSubject" class="filter-field" placeholder="Enter subject">
+                </div>
+
+                <div class="filter-bottom-row">
+                    <div class="filter-input-group filter-subject-group">
+                        <label for="searchSubject"><i class="fas fa-heading"></i> Subject <span class="filter-optional">Optional</span></label>
+                        <input type="text" id="searchSubject" class="filter-field" placeholder="Search subject..." autocomplete="off">
                     </div>
                     <div class="filter-actions">
-                        <button onclick="applyFilters()" class="btn-apply-filter">
-                            <i class="fas fa-search"></i> Apply
+                        <button type="button" onclick="applyFilters()" class="btn-apply-filter">
+                            <i class="fas fa-search"></i><span>Apply Filter</span>
                         </button>
-                        <button onclick="resetFilters()" class="btn-reset-filter">
-                            <i class="fas fa-undo-alt"></i> Reset
+                        <button type="button" onclick="resetFilters()" class="btn-reset-filter">
+                            <i class="fas fa-rotate-left"></i><span>Reset</span>
                         </button>
                     </div>
                 </div>
             </div>
-            
+
             <!-- Records Table -->
-            <div class="records-table-container">
+
+            <div class="records-table-container" id="transactionRecordsSection">
+
                 <div class="table-header">
+
                     <h3><i class="fas fa-list"></i> Transaction Records</h3>
+
                     <div class="table-info">
+
                         <span id="recordCount">0</span> records found
+
                     </div>
+
                 </div>
+
                 <div class="table-wrapper">
+
                     <table class="records-table">
+
                         <thead>
+
                             <tr>
+
                                 <th width="80">Action</th>
+
                                 <th width="60">#</th>
+
                                 <th width="120">Ref No</th>
+
                                 <th width="110">Date</th>
+
                                 <th>Subject</th>
+
                                 <th width="110">Pass No</th>
+
                                 <th width="130">In Payment</th>
+
                                 <th width="130">Out Payment</th>
+
                                 <th width="150">Sub Agent</th>
+
                                 <th width="130">Balance</th>
+
                             </tr>
+
                         </thead>
+
                         <tbody id="viewTableBody">
+
                             <tr>
+
                                 <td colspan="10" class="loading-cell">
+
                                     <i class="fas fa-spinner fa-pulse"></i> Loading records...
+
                                 </td>
+
                             </tr>
+
                         </tbody>
+
                     </table>
+
                 </div>
+
             </div>
+
+
 
             <!-- Cheque Deposit Slips -->
-            <div class="records-table-container cheque-month-section">
+
+            <div class="records-table-container cheque-month-section" id="chequeDepositSection">
+
                 <div class="table-header">
+
                     <h3><i class="fas fa-money-check-dollar"></i> Cheque Deposit Slips</h3>
+
                     <div class="table-info"><span>{{ cheque_deposits|length }}</span> deposits found</div>
+
                 </div>
+
                 {% if cheque_deposits %}
+
                 <div class="table-wrapper">
+
                     <table class="records-table cheque-list-table">
+
                         <thead>
+
                             <tr><th>No</th><th>Date</th><th>Time</th><th>Deposit ID</th><th>Amount</th><th>Notes</th><th>PDF</th></tr>
+
                         </thead>
+
                         <tbody>
+
                         {% for dep in cheque_deposits %}
+
                             <tr>
+
                                 <td>{{ loop.index }}</td>
+
                                 <td>{{ dep.date or '-' }}</td>
+
                                 <td>{{ dep.time or '-' }}</td>
+
                                 <td><span class="ref-badge">{{ dep.deposit_id }}</span></td>
+
                                 <td class="payment-in-cell">{{ dep.amount|amount }}</td>
+
                                 <td>{{ dep.notes or '-' }}</td>
+
                                 <td><a class="cheque-pdf-link" href="/cheque_deposit_pdf/{{ dep.deposit_id }}"><i class="fas fa-file-pdf"></i> PDF</a></td>
+
                             </tr>
+
                         {% endfor %}
+
                         </tbody>
+
                     </table>
+
                 </div>
+
                 {% else %}
+
                 <div class="cheque-list-empty"><i class="fas fa-money-check"></i><p>No cheque deposits saved for this month.</p></div>
+
                 {% endif %}
+
             </div>
+
         </div>
+
     </div>
+
+
 
     <!-- Delete Record Confirmation Modal -->
+
     <div id="deleteRecordModal" class="modal">
+
         <div class="modal-content small-modal">
+
             <div class="modal-icon">
+
                 <i class="fas fa-exclamation-triangle"></i>
+
             </div>
+
             <h3>Delete Record</h3>
+
             <p id="deleteRecordMessage">Are you sure you want to delete this record? This action cannot be undone.</p>
+
             <div class="modal-buttons">
+
                 <button onclick="confirmDeleteRecord()" class="btn-danger">
+
                     <i class="fas fa-trash-alt"></i> Delete
+
                 </button>
+
                 <button onclick="closeDeleteRecordModal()" class="btn-secondary">
+
                     <i class="fas fa-times"></i> Cancel
+
                 </button>
+
             </div>
+
         </div>
+
     </div>
 
+
+
     <!-- Edit Record Modal -->
+
     <div id="editRecordModal" class="modal">
+
         <div class="modal-content">
+
             <div class="modal-header">
+
                 <i class="fas fa-edit"></i>
+
                 <h3>Edit Record</h3>
+
             </div>
+
             <p>Update the details below for <strong id="editRefNoLabel"></strong>.</p>
+
             <div class="input-group">
+
                 <label>Date</label>
+
                 <input type="date" id="editDate" class="modal-input">
+
             </div>
+
             <div class="input-group">
+
                 <label>Subject</label>
+
                 <input type="text" id="editSubject" class="modal-input" placeholder="Enter subject">
+
             </div>
+
             <div class="input-group">
+
                 <label>Pass No</label>
+
                 <input type="text" id="editPassNo" class="modal-input" placeholder="Enter pass no">
+
             </div>
+
             <div class="input-group">
+
                 <label>In Payment</label>
+
                 <input type="text" id="editInPayment" class="modal-input" placeholder="0" inputmode="decimal">
+
             </div>
+
             <div class="input-group">
+
                 <label>Out Payment</label>
+
                 <input type="text" id="editOutPayment" class="modal-input" placeholder="0" inputmode="decimal">
+
             </div>
+
             <div class="input-group">
+
                 <label>Sub Agent</label>
+
                 <input type="text" id="editSubAgent" class="modal-input" placeholder="Enter sub agent">
+
             </div>
+
             <div class="modal-buttons">
+
                 <button onclick="confirmUpdateRecord()" class="btn-confirm">
+
                     <i class="fas fa-check"></i> Save Changes
+
                 </button>
+
                 <button onclick="closeEditRecordModal()" class="btn-cancel">
+
                     <i class="fas fa-times"></i> Cancel
+
                 </button>
+
             </div>
+
         </div>
+
     </div>
+
+
 
     <div id="message" class="message"></div>
 
+
+
     <script>
+
         let allRecords = [];
+
         let pendingRecordDelete = null;
+
         let pendingRecordEditRefNo = null;
+
         const monthName = '{{ month_name }}';
 
+
+
         function cleanAmountValue(value) {
+
             return String(value || '0').replace(/,/g, '') || '0';
+
         }
+
+
 
         function formatAmountValue(value) {
+
             const cleaned = String(value || '').replace(/,/g, '').replace(/[^0-9.]/g, '');
+
             if (!cleaned) return '';
+
             const parts = cleaned.split('.');
+
             const whole = parts[0] ? Number(parts[0]).toLocaleString('en-US') : '0';
+
             return parts.length > 1 ? whole + '.' + parts.slice(1).join('').slice(0, 2) : whole;
+
         }
 
+
+
         ['editInPayment', 'editOutPayment'].forEach(id => {
+
             const el = document.getElementById(id);
+
             if (el) {
+
                 el.addEventListener('input', function() {
+
                     this.value = formatAmountValue(this.value);
+
+                });
+
+            }
+
+        });
+
+
+
+        function updateDate() {
+
+            const now = new Date();
+
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+
+            const dateElement = document.getElementById('currentDate');
+
+            if (dateElement) {
+
+                dateElement.textContent = now.toLocaleDateString('en-US', options);
+
+            }
+
+        }
+
+
+
+        function loadMonthStats() {
+
+            fetch(`/get_month_stats/${monthName}`)
+
+                .then(response => response.json())
+
+                .then(data => {
+
+                    if (!data.error) {
+
+                        document.getElementById('totalRecords').textContent = data.total_records || 0;
+
+                        document.getElementById('openingBalance').innerHTML = (data.opening_balance || 0).toLocaleString('en-US');
+
+                        document.getElementById('closingBalance').innerHTML = (data.closing_balance || 0).toLocaleString('en-US');
+
+                        const netChange = (data.closing_balance || 0) - (data.opening_balance || 0);
+
+                        const netChangeColor = netChange >= 0 ? '#4CAF50' : '#DC143C';
+
+                        const netChangeIcon = netChange >= 0 ? '↑' : '↓';
+
+                        document.getElementById('netChange').innerHTML = `${netChangeIcon} ${Math.abs(netChange).toLocaleString('en-US')}`;
+
+                        document.getElementById('netChange').style.color = netChangeColor;
+
+                    }
+
+                })
+
+                .catch(error => console.error('Error loading month stats:', error));
+
+        }
+
+
+
+        function loadRecords() {
+
+            fetch(`/get_month_records/${monthName}`)
+
+                .then(response => response.json())
+
+                .then(data => {
+
+                    allRecords = data.records || [];
+
+                    displayRecords(allRecords);
+
+                })
+
+                .catch(error => {
+
+                    console.error('Error loading records:', error);
+
+                    document.getElementById('viewTableBody').innerHTML = '<tr><td colspan="10" class="error-cell"><i class="fas fa-exclamation-circle"></i> Error loading records</td></tr>';
+
+                });
+
+        }
+
+        function displayRecords(records) {
+
+            const tbody = document.getElementById('viewTableBody');
+
+            const recordCountSpan = document.getElementById('recordCount');
+
+            if (records.length === 0) {
+
+                tbody.innerHTML = '<tr><td colspan="10" class="empty-cell"><i class="fas fa-inbox"></i> No records found</td></tr>';
+
+                recordCountSpan.textContent = '0';
+
+                return;
+
+            }
+
+            recordCountSpan.textContent = records.length;
+
+            tbody.innerHTML = records.map(record => `
+
+                <tr class="record-row">
+
+                    <td class="action-cell">
+
+                        <button onclick="showEditRecordModal('${record.ref_no}')" class="edit-icon-btn" title="Edit Record">
+
+                            <i class="fas fa-edit"></i>
+
+                        </button>
+
+                        <button onclick="showDeleteRecordModal('${record.ref_no}', ${record.no})" class="delete-icon-btn" title="Delete Record">
+
+                            <i class="fas fa-trash-alt"></i>
+
+                        </button>
+
+                    </td>
+
+                    <td class="number-cell">${record.no}</td>
+
+                    <td class="ref-cell"><span class="ref-badge">${escapeHtml(record.ref_no || '')}</span></td>
+
+                    <td class="date-cell">${record.date || ''}</td>
+
+                    <td class="subject-cell">${escapeHtml(record.subject || '')}</td>
+
+                    <td class="pass-cell">${escapeHtml(record.pass_no || '') || '-'}</td>
+
+                    <td class="payment-in-cell"><i class="fas fa-arrow-down"></i> ${formatCurrency(record.in_payment)}</td>
+
+                    <td class="payment-out-cell"><i class="fas fa-arrow-up"></i> ${formatCurrency(record.out_payment)}</td>
+
+                    <td class="agent-cell">${escapeHtml(record.sub_agent || '') || '-'}</td>
+
+                    <td class="balance-cell">${formatCurrency(record.balance)}</td>
+
+                </tr>
+
+            `).join('');
+
+        }
+
+        function showDeleteRecordModal(refNo, rowNo) {
+
+            pendingRecordDelete = refNo;
+
+            document.getElementById('deleteRecordMessage').innerHTML = `Are you sure you want to delete <strong>${refNo}</strong>? All reference numbers will be re-indexed automatically.`;
+
+            document.getElementById('deleteRecordModal').style.display = 'flex';
+
+        }
+
+        function confirmDeleteRecord() {
+
+            if (pendingRecordDelete) {
+
+                fetch('/delete_record_from_month', {
+
+                    method: 'POST',
+
+                    headers: {
+
+                        'Content-Type': 'application/json',
+
+                    },
+
+                    body: JSON.stringify({ 
+
+                        month_name: monthName,
+
+                        ref_no: pendingRecordDelete 
+
+                    })
+
+                })
+
+                .then(response => response.json())
+
+                .then(data => {
+
+                    if (data.success) {
+
+                        showMessage(data.message, 'success');
+
+                        loadRecords();
+
+                        loadMonthStats();
+
+                    } else {
+
+                        showMessage('Error: ' + data.message, 'error');
+
+                    }
+
+                    closeDeleteRecordModal();
+
+                    pendingRecordDelete = null;
+
+                })
+
+                .catch(error => {
+
+                    showMessage('Error deleting record', 'error');
+
+                    closeDeleteRecordModal();
+
+                });
+
+            }
+
+        }
+
+        function closeDeleteRecordModal() {
+
+            document.getElementById('deleteRecordModal').style.display = 'none';
+
+            pendingRecordDelete = null;
+
+        }
+
+
+
+        function showEditRecordModal(refNo) {
+
+            const record = allRecords.find(r => String(r.ref_no) === String(refNo));
+
+            if (!record) return;
+
+
+
+            pendingRecordEditRefNo = refNo;
+
+            document.getElementById('editRefNoLabel').textContent = record.ref_no || '';
+
+            document.getElementById('editDate').value = record.date || '';
+
+            document.getElementById('editSubject').value = record.subject || '';
+
+            document.getElementById('editPassNo').value = record.pass_no || '';
+
+            document.getElementById('editInPayment').value = record.in_payment ? formatAmountValue(record.in_payment) : '';
+
+            document.getElementById('editOutPayment').value = record.out_payment ? formatAmountValue(record.out_payment) : '';
+
+            document.getElementById('editSubAgent').value = record.sub_agent || '';
+
+            document.getElementById('editRecordModal').style.display = 'flex';
+
+        }
+
+
+
+        function confirmUpdateRecord() {
+
+            if (!pendingRecordEditRefNo) return;
+
+
+
+            const date = document.getElementById('editDate').value;
+
+            const subject = document.getElementById('editSubject').value.trim();
+
+
+
+            if (!date || !subject) {
+
+                showMessage('Date and Subject are required', 'error');
+
+                return;
+
+            }
+
+
+
+            fetch('/update_record_in_month', {
+
+                method: 'POST',
+
+                headers: {
+
+                    'Content-Type': 'application/json',
+
+                },
+
+                body: JSON.stringify({
+
+                    month_name: monthName,
+
+                    ref_no: pendingRecordEditRefNo,
+
+                    date: date,
+
+                    subject: subject,
+
+                    pass_no: document.getElementById('editPassNo').value.trim(),
+
+                    in_payment: cleanAmountValue(document.getElementById('editInPayment').value),
+
+                    out_payment: cleanAmountValue(document.getElementById('editOutPayment').value),
+
+                    sub_agent: document.getElementById('editSubAgent').value.trim()
+
+                })
+
+            })
+
+            .then(response => response.json())
+
+            .then(data => {
+
+                if (data.success) {
+
+                    showMessage(data.message, 'success');
+
+                    loadRecords();
+
+                    loadMonthStats();
+
+                } else {
+
+                    showMessage('Error: ' + data.message, 'error');
+
+                }
+
+                closeEditRecordModal();
+
+            })
+
+            .catch(error => {
+
+                showMessage('Error updating record', 'error');
+
+                closeEditRecordModal();
+
+            });
+
+        }
+
+
+
+        function closeEditRecordModal() {
+
+            document.getElementById('editRecordModal').style.display = 'none';
+
+            pendingRecordEditRefNo = null;
+
+        }
+
+        function formatCurrency(amount) {
+
+            if (!amount || amount === 0) return '0';
+
+            return parseFloat(amount).toLocaleString('en-US');
+
+        }
+
+        function extractReferenceNumber(refValue) {
+            const value = String(refValue || '').trim();
+            if (!value) return null;
+            const match = value.match(/(\d+)\s*$/);
+            if (!match) return null;
+            return parseInt(match[1], 10);
+        }
+
+        function normaliseReferenceInput(inputElement) {
+            const rawValue = inputElement.value.trim();
+            if (!rawValue) return;
+            const number = extractReferenceNumber(rawValue);
+            if (number === null) return;
+            inputElement.value = `UTA-${String(number).padStart(2, '0')}`;
+        }
+
+        function applyFilters() {
+            const dateFrom = document.getElementById('filterDateFrom').value;
+            const dateTo = document.getElementById('filterDateTo').value;
+            const refFromValue = document.getElementById('filterRefFrom').value.trim();
+            const refToValue = document.getElementById('filterRefTo').value.trim();
+            const searchSubject = document.getElementById('searchSubject').value.toLowerCase().trim();
+
+            const refFrom = extractReferenceNumber(refFromValue);
+            const refTo = extractReferenceNumber(refToValue);
+
+            if (dateFrom && dateTo && dateFrom > dateTo) {
+                showMessage('From Date cannot be after To Date', 'error');
+                return;
+            }
+            if (refFromValue && refFrom === null) {
+                showMessage('Enter a valid From Reference, for example UTA-01', 'error');
+                return;
+            }
+            if (refToValue && refTo === null) {
+                showMessage('Enter a valid To Reference, for example UTA-10', 'error');
+                return;
+            }
+            if (refFrom !== null && refTo !== null && refFrom > refTo) {
+                showMessage('From Reference cannot be greater than To Reference', 'error');
+                return;
+            }
+
+            let filtered = [...allRecords];
+
+            if (dateFrom) filtered = filtered.filter(record => String(record.date || '') >= dateFrom);
+            if (dateTo) filtered = filtered.filter(record => String(record.date || '') <= dateTo);
+
+            if (refFrom !== null || refTo !== null) {
+                filtered = filtered.filter(record => {
+                    const recordRef = extractReferenceNumber(record.ref_no);
+                    if (recordRef === null) return false;
+                    if (refFrom !== null && recordRef < refFrom) return false;
+                    if (refTo !== null && recordRef > refTo) return false;
+                    return true;
+                });
+            }
+
+            if (searchSubject) {
+                filtered = filtered.filter(record =>
+                    String(record.subject || '').toLowerCase().includes(searchSubject)
+                );
+            }
+
+            displayRecords(filtered);
+            updateFilterIndicator(filtered.length);
+            showMessage(`Found ${filtered.length} record(s)`, 'success');
+        }
+
+        function updateFilterIndicator(count) {
+            const indicator = document.getElementById('filterActiveIndicator');
+            if (!indicator) return;
+
+            const hasFilters =
+                document.getElementById('filterDateFrom').value ||
+                document.getElementById('filterDateTo').value ||
+                document.getElementById('filterRefFrom').value.trim() ||
+                document.getElementById('filterRefTo').value.trim() ||
+                document.getElementById('searchSubject').value.trim();
+
+            indicator.classList.toggle('active', Boolean(hasFilters));
+            indicator.querySelector('span').textContent = hasFilters ? `${count} Matching` : 'All Records';
+        }
+
+        function resetFilters() {
+            document.getElementById('filterDateFrom').value = '';
+            document.getElementById('filterDateTo').value = '';
+            document.getElementById('filterRefFrom').value = '';
+            document.getElementById('filterRefTo').value = '';
+            document.getElementById('searchSubject').value = '';
+            displayRecords(allRecords);
+            updateFilterIndicator(allRecords.length);
+            showMessage('Filters reset', 'success');
+        }
+
+        ['filterRefFrom', 'filterRefTo'].forEach(id => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.addEventListener('blur', function() {
+                    normaliseReferenceInput(this);
                 });
             }
         });
 
-        function updateDate() {
-            const now = new Date();
-            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-            const dateElement = document.getElementById('currentDate');
-            if (dateElement) {
-                dateElement.textContent = now.toLocaleDateString('en-US', options);
-            }
-        }
-
-        function loadMonthStats() {
-            fetch(`/get_month_stats/${monthName}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (!data.error) {
-                        document.getElementById('totalRecords').textContent = data.total_records || 0;
-                        document.getElementById('openingBalance').innerHTML = (data.opening_balance || 0).toLocaleString('en-US');
-                        document.getElementById('closingBalance').innerHTML = (data.closing_balance || 0).toLocaleString('en-US');
-                        
-                        const netChange = (data.closing_balance || 0) - (data.opening_balance || 0);
-                        const netChangeColor = netChange >= 0 ? '#4CAF50' : '#DC143C';
-                        const netChangeIcon = netChange >= 0 ? '↑' : '↓';
-                        document.getElementById('netChange').innerHTML = `${netChangeIcon} ${Math.abs(netChange).toLocaleString('en-US')}`;
-                        document.getElementById('netChange').style.color = netChangeColor;
+        ['filterDateFrom', 'filterDateTo', 'filterRefFrom', 'filterRefTo', 'searchSubject'].forEach(id => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.addEventListener('keydown', function(event) {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        applyFilters();
                     }
-                })
-                .catch(error => console.error('Error loading month stats:', error));
-        }
-
-        function loadRecords() {
-            fetch(`/get_month_records/${monthName}`)
-                .then(response => response.json())
-                .then(data => {
-                    allRecords = data.records || [];
-                    displayRecords(allRecords);
-                })
-                .catch(error => {
-                    console.error('Error loading records:', error);
-                    document.getElementById('viewTableBody').innerHTML = '<tr><td colspan="10" class="error-cell"><i class="fas fa-exclamation-circle"></i> Error loading records</td></tr>';
-                });
-        }
-        
-        function displayRecords(records) {
-            const tbody = document.getElementById('viewTableBody');
-            const recordCountSpan = document.getElementById('recordCount');
-            
-            if (records.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" class="empty-cell"><i class="fas fa-inbox"></i> No records found</td></tr>';
-                recordCountSpan.textContent = '0';
-                return;
-            }
-            
-            recordCountSpan.textContent = records.length;
-            
-            tbody.innerHTML = records.map(record => `
-                <tr class="record-row">
-                    <td class="action-cell">
-                        <button onclick="showEditRecordModal('${record.ref_no}')" class="edit-icon-btn" title="Edit Record">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button onclick="showDeleteRecordModal('${record.ref_no}', ${record.no})" class="delete-icon-btn" title="Delete Record">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
-                    </td>
-                    <td class="number-cell">${record.no}</td>
-                    <td class="ref-cell"><span class="ref-badge">${escapeHtml(record.ref_no || '')}</span></td>
-                    <td class="date-cell">${record.date || ''}</td>
-                    <td class="subject-cell">${escapeHtml(record.subject || '')}</td>
-                    <td class="pass-cell">${escapeHtml(record.pass_no || '') || '-'}</td>
-                    <td class="payment-in-cell"><i class="fas fa-arrow-down"></i> ${formatCurrency(record.in_payment)}</td>
-                    <td class="payment-out-cell"><i class="fas fa-arrow-up"></i> ${formatCurrency(record.out_payment)}</td>
-                    <td class="agent-cell">${escapeHtml(record.sub_agent || '') || '-'}</td>
-                    <td class="balance-cell">${formatCurrency(record.balance)}</td>
-                </tr>
-            `).join('');
-        }
-        
-        function showDeleteRecordModal(refNo, rowNo) {
-            pendingRecordDelete = refNo;
-            document.getElementById('deleteRecordMessage').innerHTML = `Are you sure you want to delete <strong>${refNo}</strong>? All reference numbers will be re-indexed automatically.`;
-            document.getElementById('deleteRecordModal').style.display = 'flex';
-        }
-        
-        function confirmDeleteRecord() {
-            if (pendingRecordDelete) {
-                fetch('/delete_record_from_month', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ 
-                        month_name: monthName,
-                        ref_no: pendingRecordDelete 
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showMessage(data.message, 'success');
-                        loadRecords();
-                        loadMonthStats();
-                    } else {
-                        showMessage('Error: ' + data.message, 'error');
-                    }
-                    closeDeleteRecordModal();
-                    pendingRecordDelete = null;
-                })
-                .catch(error => {
-                    showMessage('Error deleting record', 'error');
-                    closeDeleteRecordModal();
                 });
             }
-        }
-        
-        function closeDeleteRecordModal() {
-            document.getElementById('deleteRecordModal').style.display = 'none';
-            pendingRecordDelete = null;
-        }
+        });
 
-        function showEditRecordModal(refNo) {
-            const record = allRecords.find(r => String(r.ref_no) === String(refNo));
-            if (!record) return;
+        function setRecordView(view) {
+            const transactionSection = document.getElementById('transactionRecordsSection');
+            const chequeSection = document.getElementById('chequeDepositSection');
+            const recordTypeFilter = document.getElementById('recordTypeFilter');
+            const transactionFilterContent = document.querySelectorAll(
+                '#transactionFilterBar .filter-range-grid, #transactionFilterBar .filter-bottom-row'
+            );
 
-            pendingRecordEditRefNo = refNo;
-            document.getElementById('editRefNoLabel').textContent = record.ref_no || '';
-            document.getElementById('editDate').value = record.date || '';
-            document.getElementById('editSubject').value = record.subject || '';
-            document.getElementById('editPassNo').value = record.pass_no || '';
-            document.getElementById('editInPayment').value = record.in_payment ? formatAmountValue(record.in_payment) : '';
-            document.getElementById('editOutPayment').value = record.out_payment ? formatAmountValue(record.out_payment) : '';
-            document.getElementById('editSubAgent').value = record.sub_agent || '';
-            document.getElementById('editRecordModal').style.display = 'flex';
-        }
-
-        function confirmUpdateRecord() {
-            if (!pendingRecordEditRefNo) return;
-
-            const date = document.getElementById('editDate').value;
-            const subject = document.getElementById('editSubject').value.trim();
-
-            if (!date || !subject) {
-                showMessage('Date and Subject are required', 'error');
-                return;
+            if (!['all', 'transactions', 'cheques'].includes(view)) {
+                view = 'all';
             }
 
-            fetch('/update_record_in_month', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    month_name: monthName,
-                    ref_no: pendingRecordEditRefNo,
-                    date: date,
-                    subject: subject,
-                    pass_no: document.getElementById('editPassNo').value.trim(),
-                    in_payment: cleanAmountValue(document.getElementById('editInPayment').value),
-                    out_payment: cleanAmountValue(document.getElementById('editOutPayment').value),
-                    sub_agent: document.getElementById('editSubAgent').value.trim()
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showMessage(data.message, 'success');
-                    loadRecords();
-                    loadMonthStats();
-                } else {
-                    showMessage('Error: ' + data.message, 'error');
-                }
-                closeEditRecordModal();
-            })
-            .catch(error => {
-                showMessage('Error updating record', 'error');
-                closeEditRecordModal();
-            });
+            if (recordTypeFilter && recordTypeFilter.value !== view) {
+                recordTypeFilter.value = view;
+            }
+
+            if (view === 'transactions') {
+                transactionSection.style.display = '';
+                chequeSection.style.display = 'none';
+                transactionFilterContent.forEach(element => element.style.display = '');
+            } else if (view === 'cheques') {
+                transactionSection.style.display = 'none';
+                chequeSection.style.display = '';
+
+                // Date / reference / subject fields currently filter transaction records.
+                // Hide them while Cheque Deposits view is selected so the UI stays clear.
+                transactionFilterContent.forEach(element => element.style.display = 'none');
+            } else {
+                transactionSection.style.display = '';
+                chequeSection.style.display = '';
+                transactionFilterContent.forEach(element => element.style.display = '');
+                view = 'all';
+            }
+
+            try {
+                sessionStorage.setItem('uta_records_view', view);
+            } catch (error) {
+                // Ignore storage errors.
+            }
         }
 
-        function closeEditRecordModal() {
-            document.getElementById('editRecordModal').style.display = 'none';
-            pendingRecordEditRefNo = null;
-        }
-        
-        function formatCurrency(amount) {
-            if (!amount || amount === 0) return '0';
-            return parseFloat(amount).toLocaleString('en-US');
-        }
-        
-        function applyFilters() {
-            const filterDate = document.getElementById('filterDate').value;
-            const searchRef = document.getElementById('searchRef').value.toLowerCase().trim();
-            const searchSubject = document.getElementById('searchSubject').value.toLowerCase().trim();
-            
-            let filtered = [...allRecords];
-            
-            if (filterDate) {
-                filtered = filtered.filter(record => record.date === filterDate);
+        function restoreRecordView() {
+            let savedView = 'all';
+
+            try {
+                savedView = sessionStorage.getItem('uta_records_view') || 'all';
+            } catch (error) {
+                savedView = 'all';
             }
-            
-            if (searchRef) {
-                filtered = filtered.filter(record => 
-                    (record.ref_no || '').toLowerCase().includes(searchRef)
-                );
+
+            if (!['all', 'transactions', 'cheques'].includes(savedView)) {
+                savedView = 'all';
             }
-            
-            if (searchSubject) {
-                filtered = filtered.filter(record => 
-                    (record.subject || '').toLowerCase().includes(searchSubject)
-                );
-            }
-            
-            displayRecords(filtered);
-            
-            if (filtered.length !== allRecords.length) {
-                showMessage(`Found ${filtered.length} record(s)`, 'success');
-            }
+
+            const recordTypeFilter = document.getElementById('recordTypeFilter');
+            if (recordTypeFilter) recordTypeFilter.value = savedView;
+            setRecordView(savedView);
         }
-        
-        function resetFilters() {
-            document.getElementById('filterDate').value = '';
-            document.getElementById('searchRef').value = '';
-            document.getElementById('searchSubject').value = '';
-            displayRecords(allRecords);
-            showMessage('Filters reset', 'success');
-        }
-        
+
         function downloadMonth() {
+
             window.location.href = `/download_excel/${monthName}`;
+
         }
-        
+
         function goBack() {
+
             window.location.href = '/view';
+
         }
-        
+
         function escapeHtml(text) {
+
             if (!text) return '';
+
             const div = document.createElement('div');
+
             div.textContent = text;
+
             return div.innerHTML;
+
         }
-        
+
         function showMessage(message, type) {
+
             const messageDiv = document.getElementById('message');
+
             messageDiv.innerHTML = '<i class="fas fa-' + (type === 'success' ? 'check-circle' : 'exclamation-circle') + '"></i> ' + message;
+
             messageDiv.className = `message ${type}`;
+
             messageDiv.style.display = 'block';
-            
+
             setTimeout(() => {
+
                 messageDiv.style.opacity = '0';
+
                 setTimeout(() => {
+
                     messageDiv.style.display = 'none';
+
                     messageDiv.style.opacity = '1';
+
                 }, 300);
+
             }, 3000);
+
         }
-        
+
         updateDate();
+
         loadMonthStats();
+
         loadRecords();
-        
+
         window.onclick = function(event) {
+
             const modal = document.getElementById('deleteRecordModal');
+
             const editModal = document.getElementById('editRecordModal');
+
             if (event.target == modal) {
+
                 closeDeleteRecordModal();
+
             }
+
             if (event.target == editModal) {
+
                 closeEditRecordModal();
+
             }
+
         }
+
+
+        window.addEventListener('DOMContentLoaded', function() {
+            restoreRecordView();
+        });
     </script>
+
+
 
     <script>
-        if (!sessionStorage.getItem('uta_logged_in')) {
-            window.location.replace('/logout');
-        }
+
         function toggleSidebar() {
+
             const sidebar = document.querySelector('.sidebar');
+
             if (sidebar) sidebar.classList.toggle('active');
+
         }
+
     </script>
+
 </body>
+
 </html>
