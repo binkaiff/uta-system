@@ -611,3 +611,38 @@
     opacity: .55;
     cursor: not-allowed;
 }
+
+
+/* ===== Combined Invoice + Salary dashboard ===== */
+.candidate-welcome-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.candidate-outline-action {
+    min-height: 46px;
+    padding: 0 18px;
+    border: 1px solid #e2b7c0;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: #b81734;
+    background: #fff;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 700;
+}
+.candidate-stats-grid-four { grid-template-columns: repeat(4,minmax(0,1fr)); }
+.candidate-stat-icon.green { color: #16845c; background: #ebfaf4; }
+.candidate-stat-card small { display: block; margin-top: 4px; color: #9aa2b3; font-size: 9px; font-weight: 700; }
+.candidate-records-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; margin-top: 20px; align-items: start; }
+.candidate-quick-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; margin-top: 20px; }
+.compact-table { min-width: 600px; }
+.compact-table td strong, .compact-table td small { display: block; }
+.compact-table td small { margin-top: 4px; color: #969eaf; font-size: 9px; }
+.candidate-invoice-table .salary-amount { color: #16845c; font-weight: 800; white-space: nowrap; }
+.candidate-small-action.salary { color: #16785a; background: #edf9f5; }
+.candidate-empty-icon.salary { color: #16845c; background: #edf9f5; }
+.salary-side-card { background: linear-gradient(160deg,#17233b 0%,#1b3a3b 100%); }
+.salary-side-card .candidate-section-label { color: #5fe0b5; }
+@media (max-width: 1250px) { .candidate-stats-grid-four { grid-template-columns: repeat(2,minmax(0,1fr)); } .candidate-records-grid { grid-template-columns: 1fr; } }
+@media (max-width: 800px) { .candidate-quick-grid { grid-template-columns: 1fr; } .candidate-welcome-actions { width: 100%; } .candidate-outline-action { width: 100%; } }
+@media (max-width: 620px) { .candidate-stats-grid-four { grid-template-columns: 1fr; } }

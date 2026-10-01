@@ -347,77 +347,72 @@ CANDIDATE_PASSWORD = os.getenv('CANDIDATE_PASSWORD', '').strip()
 
 
 CANDIDATE_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'candidate_data')
-
 CANDIDATE_INVOICES_FILE = os.path.join(CANDIDATE_DATA_DIR, 'invoices.json')
+CANDIDATE_SALARY_SLIPS_FILE = os.path.join(CANDIDATE_DATA_DIR, 'salary_slips.json')
 
+
+def _load_candidate_json_list(filename):
+    os.makedirs(CANDIDATE_DATA_DIR, exist_ok=True)
+    if not os.path.exists(filename):
+        return []
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _save_candidate_json_list(filename, rows):
+    os.makedirs(CANDIDATE_DATA_DIR, exist_ok=True)
+    temp_file = filename + '.tmp'
+    with open(temp_file, 'w', encoding='utf-8') as f:
+        json.dump(rows, f, indent=2, ensure_ascii=False)
+    os.replace(temp_file, filename)
 
 
 def load_candidate_invoices():
-
-    os.makedirs(CANDIDATE_DATA_DIR, exist_ok=True)
-
-    if not os.path.exists(CANDIDATE_INVOICES_FILE):
-
-        return []
-
-    try:
-
-        with open(CANDIDATE_INVOICES_FILE, 'r', encoding='utf-8') as f:
-
-            data = json.load(f)
-
-            return data if isinstance(data, list) else []
-
-    except Exception:
-
-        return []
-
+    return _load_candidate_json_list(CANDIDATE_INVOICES_FILE)
 
 
 def save_candidate_invoices(invoices):
+    _save_candidate_json_list(CANDIDATE_INVOICES_FILE, invoices)
 
-    os.makedirs(CANDIDATE_DATA_DIR, exist_ok=True)
 
-    temp_file = CANDIDATE_INVOICES_FILE + '.tmp'
+def load_candidate_salary_slips():
+    return _load_candidate_json_list(CANDIDATE_SALARY_SLIPS_FILE)
 
-    with open(temp_file, 'w', encoding='utf-8') as f:
 
-        json.dump(invoices, f, indent=2, ensure_ascii=False)
-
-    os.replace(temp_file, CANDIDATE_INVOICES_FILE)
-
+def save_candidate_salary_slips(slips):
+    _save_candidate_json_list(CANDIDATE_SALARY_SLIPS_FILE, slips)
 
 
 def next_candidate_invoice_number():
-
     year = datetime.now().year
-
     prefix = f"INV-{year}-"
-
     max_no = 0
-
     for invoice in load_candidate_invoices():
-
         number = str(invoice.get('invoiceNo', ''))
-
         if number.startswith(prefix):
-
             try:
-
                 max_no = max(max_no, int(number.rsplit('-', 1)[1]))
-
             except Exception:
-
                 pass
-
     return f"{prefix}{max_no + 1:03d}"
 
 
-
-
-
-
-
+def next_candidate_salary_slip_number():
+    year = datetime.now().year
+    prefix = f"SAL-{year}-"
+    max_no = 0
+    for slip in load_candidate_salary_slips():
+        number = str(slip.get('slipNo', ''))
+        if number.startswith(prefix):
+            try:
+                max_no = max(max_no, int(number.rsplit('-', 1)[1]))
+            except Exception:
+                pass
+    return f"{prefix}{max_no + 1:03d}"
 # Display information for authorised UTA users.
 # Profile image files must remain in /static as thanzeel.png, kaiff.png and firnas.png.
 
@@ -1186,29 +1181,45 @@ def logout():
 @candidate_login_required
 def candidate_dashboard():
     invoices = load_candidate_invoices()
-    invoices.sort(key=lambda x: str(x.get('createdAt', '')), reverse=True)
+    invoices.sort(key=lambda x: str(x.get('updatedAt') or x.get('createdAt', '')), reverse=True)
+
+    salary_slips = load_candidate_salary_slips()
+    salary_slips.sort(key=lambda x: str(x.get('updatedAt') or x.get('createdAt', '')), reverse=True)
 
     today_key = datetime.now().strftime('%Y-%m-%d')
-    total_value = 0.0
-    today_count = 0
+    total_invoice_value = 0.0
+    total_salary_value = 0.0
+    today_invoices = 0
+    today_salary_slips = 0
 
     for invoice in invoices:
         try:
-            total_value += float(invoice.get('grandTotal', 0) or 0)
+            total_invoice_value += float(invoice.get('grandTotal', 0) or 0)
         except (TypeError, ValueError):
             pass
-
         if str(invoice.get('date', '')).strip() == today_key:
-            today_count += 1
+            today_invoices += 1
+
+    for slip in salary_slips:
+        try:
+            total_salary_value += float(slip.get('totalAmount', 0) or 0)
+        except (TypeError, ValueError):
+            pass
+        if str(slip.get('date', '')).strip() == today_key:
+            today_salary_slips += 1
 
     return render_template(
         'candidate/dashboard.html',
         current_user=get_candidate_user(),
         current_date=datetime.now().strftime('%A, %d %B %Y'),
         total_invoices=len(invoices),
-        today_invoices=today_count,
-        total_invoice_value=total_value,
-        recent_invoices=invoices[:5]
+        today_invoices=today_invoices,
+        total_invoice_value=total_invoice_value,
+        recent_invoices=invoices[:5],
+        total_salary_slips=len(salary_slips),
+        today_salary_slips=today_salary_slips,
+        total_salary_value=total_salary_value,
+        recent_salary_slips=salary_slips[:5]
     )
 
 
@@ -1222,162 +1233,266 @@ def candidate_invoice():
     )
 
 
-@app.route('/api/candidate/invoices', methods=['GET'])
-
+@app.route('/candidate/salary-slip')
 @candidate_login_required
+def candidate_salary_slip():
+    return render_template(
+        'candidate/salary_slip.html',
+        current_user=get_candidate_user(),
+        current_date=datetime.now().strftime('%A, %d %B %Y')
+    )
 
+
+# ---------------- Candidate Invoice API ----------------
+
+@app.route('/api/candidate/invoices', methods=['GET'])
+@candidate_login_required
 def candidate_invoices_api():
-
     invoices = load_candidate_invoices()
-
-    invoices.sort(key=lambda x: str(x.get('createdAt', '')), reverse=True)
-
+    invoices.sort(key=lambda x: str(x.get('updatedAt') or x.get('createdAt', '')), reverse=True)
     return jsonify({'success': True, 'invoices': invoices})
 
 
-
 @app.route('/api/candidate/invoices/next-number', methods=['GET'])
-
 @candidate_login_required
-
 def candidate_invoice_next_number_api():
-
     return jsonify({'success': True, 'invoiceNo': next_candidate_invoice_number()})
 
 
-
-@app.route('/api/candidate/invoices', methods=['POST'])
-
-@candidate_login_required
-
-def candidate_invoice_create_api():
-
-    data = request.get_json(silent=True) or {}
-
+def _clean_invoice_payload(data):
     client_name = str(data.get('clientName', '')).strip()
-
     if not client_name:
-
-        return jsonify({'success': False, 'message': 'Client name is required.'}), 400
-
-
+        return None, 'Client name is required.'
 
     items = data.get('items', [])
-
     if not isinstance(items, list):
-
-        return jsonify({'success': False, 'message': 'Invalid invoice items.'}), 400
-
-
+        return None, 'Invalid invoice items.'
 
     clean_items = []
-
     subtotal = 0.0
-
     for item in items:
-
         if not isinstance(item, dict):
-
             continue
-
         description = str(item.get('description', '')).strip()
-
         try:
-
             quantity = float(item.get('quantity', 0) or 0)
-
             price = float(item.get('price', 0) or 0)
-
         except (TypeError, ValueError):
-
             quantity = 0.0
-
             price = 0.0
-
         total = quantity * price
-
         clean_items.append({
-
             'description': description,
-
             'quantity': quantity,
-
             'price': price,
-
             'total': total
-
         })
-
         subtotal += total
 
+    if not clean_items:
+        return None, 'At least one invoice item is required.'
 
+    return {
+        'date': str(data.get('date', '')).strip() or datetime.now().strftime('%Y-%m-%d'),
+        'clientName': client_name,
+        'passportNo': str(data.get('passportNo', '')).strip(),
+        'destination': str(data.get('destination', '')).strip(),
+        'items': clean_items,
+        'subtotal': subtotal,
+        'vat': 0,
+        'grandTotal': subtotal,
+    }, None
+
+
+@app.route('/api/candidate/invoices', methods=['POST'])
+@candidate_login_required
+def candidate_invoice_create_api():
+    data = request.get_json(silent=True) or {}
+    clean, error = _clean_invoice_payload(data)
+    if error:
+        return jsonify({'success': False, 'message': error}), 400
 
     invoices = load_candidate_invoices()
-
-    invoice_id = int(datetime.now().timestamp() * 1000)
-
     invoice_no = str(data.get('invoiceNo', '')).strip() or next_candidate_invoice_number()
-
     if any(str(inv.get('invoiceNo', '')).strip().lower() == invoice_no.lower() for inv in invoices):
-
         invoice_no = next_candidate_invoice_number()
 
-
-
     invoice = {
-
-        'id': invoice_id,
-
+        'id': int(datetime.now().timestamp() * 1000),
         'invoiceNo': invoice_no,
-
-        'date': str(data.get('date', '')).strip() or datetime.now().strftime('%Y-%m-%d'),
-
-        'clientName': client_name,
-
-        'passportNo': str(data.get('passportNo', '')).strip(),
-
-        'destination': str(data.get('destination', '')).strip(),
-
-        'items': clean_items,
-
-        'subtotal': subtotal,
-
-        'vat': 0,
-
-        'grandTotal': subtotal,
-
+        **clean,
         'createdAt': datetime.now().isoformat(timespec='seconds'),
-
         'createdBy': get_candidate_user()
-
     }
-
     invoices.append(invoice)
-
     save_candidate_invoices(invoices)
-
     return jsonify({'success': True, 'message': 'Invoice saved successfully.', 'invoice': invoice})
 
 
-
-@app.route('/api/candidate/invoices/<int:invoice_id>', methods=['DELETE'])
-
+@app.route('/api/candidate/invoices/<int:invoice_id>', methods=['GET'])
 @candidate_login_required
+def candidate_invoice_get_api(invoice_id):
+    invoice = next((inv for inv in load_candidate_invoices() if int(inv.get('id', 0) or 0) == invoice_id), None)
+    if not invoice:
+        return jsonify({'success': False, 'message': 'Invoice not found.'}), 404
+    return jsonify({'success': True, 'invoice': invoice})
 
-def candidate_invoice_delete_api(invoice_id):
+
+@app.route('/api/candidate/invoices/<int:invoice_id>', methods=['PUT'])
+@candidate_login_required
+def candidate_invoice_update_api(invoice_id):
+    data = request.get_json(silent=True) or {}
+    clean, error = _clean_invoice_payload(data)
+    if error:
+        return jsonify({'success': False, 'message': error}), 400
 
     invoices = load_candidate_invoices()
-
-    new_invoices = [inv for inv in invoices if int(inv.get('id', 0) or 0) != invoice_id]
-
-    if len(new_invoices) == len(invoices):
-
+    index = next((i for i, inv in enumerate(invoices) if int(inv.get('id', 0) or 0) == invoice_id), None)
+    if index is None:
         return jsonify({'success': False, 'message': 'Invoice not found.'}), 404
 
-    save_candidate_invoices(new_invoices)
+    existing = invoices[index]
+    invoice_no = str(data.get('invoiceNo', '')).strip() or str(existing.get('invoiceNo', '')).strip() or next_candidate_invoice_number()
+    if any(i != index and str(inv.get('invoiceNo', '')).strip().lower() == invoice_no.lower() for i, inv in enumerate(invoices)):
+        return jsonify({'success': False, 'message': 'Invoice number already exists.'}), 400
 
+    updated = {
+        **existing,
+        'invoiceNo': invoice_no,
+        **clean,
+        'updatedAt': datetime.now().isoformat(timespec='seconds'),
+        'updatedBy': get_candidate_user()
+    }
+    invoices[index] = updated
+    save_candidate_invoices(invoices)
+    return jsonify({'success': True, 'message': 'Invoice updated successfully.', 'invoice': updated})
+
+
+@app.route('/api/candidate/invoices/<int:invoice_id>', methods=['DELETE'])
+@candidate_login_required
+def candidate_invoice_delete_api(invoice_id):
+    invoices = load_candidate_invoices()
+    new_invoices = [inv for inv in invoices if int(inv.get('id', 0) or 0) != invoice_id]
+    if len(new_invoices) == len(invoices):
+        return jsonify({'success': False, 'message': 'Invoice not found.'}), 404
+    save_candidate_invoices(new_invoices)
     return jsonify({'success': True, 'message': 'Invoice deleted successfully.'})
 
+
+# ---------------- Candidate Salary Slip API ----------------
+
+@app.route('/api/candidate/salary-slips', methods=['GET'])
+@candidate_login_required
+def candidate_salary_slips_api():
+    slips = load_candidate_salary_slips()
+    slips.sort(key=lambda x: str(x.get('updatedAt') or x.get('createdAt', '')), reverse=True)
+    return jsonify({'success': True, 'salarySlips': slips})
+
+
+def _clean_salary_slip_payload(data):
+    full_name = str(data.get('fullName', '')).strip()
+    if not full_name:
+        return None, 'Full name is required.'
+
+    salary_month = str(data.get('salaryMonth', '')).strip()
+    if not salary_month:
+        return None, 'Salary month is required.'
+
+    items = data.get('items', [])
+    if not isinstance(items, list):
+        return None, 'Invalid salary items.'
+
+    clean_items = []
+    total_amount = 0.0
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        description = str(item.get('description', '')).strip()
+        try:
+            amount = float(item.get('amount', 0) or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
+        clean_items.append({'description': description, 'amount': amount})
+        total_amount += amount
+
+    if not clean_items:
+        return None, 'At least one salary item is required.'
+
+    return {
+        'fullName': full_name,
+        'fullAddress': str(data.get('fullAddress', '')).strip(),
+        'nicNo': str(data.get('nicNo', '')).strip(),
+        'date': str(data.get('date', '')).strip() or datetime.now().strftime('%Y-%m-%d'),
+        'salaryMonth': salary_month,
+        'items': clean_items,
+        'totalAmount': total_amount,
+    }, None
+
+
+@app.route('/api/candidate/salary-slips', methods=['POST'])
+@candidate_login_required
+def candidate_salary_slip_create_api():
+    data = request.get_json(silent=True) or {}
+    clean, error = _clean_salary_slip_payload(data)
+    if error:
+        return jsonify({'success': False, 'message': error}), 400
+
+    slips = load_candidate_salary_slips()
+    slip = {
+        'id': int(datetime.now().timestamp() * 1000),
+        'slipNo': next_candidate_salary_slip_number(),
+        **clean,
+        'createdAt': datetime.now().isoformat(timespec='seconds'),
+        'createdBy': get_candidate_user()
+    }
+    slips.append(slip)
+    save_candidate_salary_slips(slips)
+    return jsonify({'success': True, 'message': 'Salary slip saved successfully.', 'salarySlip': slip})
+
+
+@app.route('/api/candidate/salary-slips/<int:slip_id>', methods=['GET'])
+@candidate_login_required
+def candidate_salary_slip_get_api(slip_id):
+    slip = next((row for row in load_candidate_salary_slips() if int(row.get('id', 0) or 0) == slip_id), None)
+    if not slip:
+        return jsonify({'success': False, 'message': 'Salary slip not found.'}), 404
+    return jsonify({'success': True, 'salarySlip': slip})
+
+
+@app.route('/api/candidate/salary-slips/<int:slip_id>', methods=['PUT'])
+@candidate_login_required
+def candidate_salary_slip_update_api(slip_id):
+    data = request.get_json(silent=True) or {}
+    clean, error = _clean_salary_slip_payload(data)
+    if error:
+        return jsonify({'success': False, 'message': error}), 400
+
+    slips = load_candidate_salary_slips()
+    index = next((i for i, row in enumerate(slips) if int(row.get('id', 0) or 0) == slip_id), None)
+    if index is None:
+        return jsonify({'success': False, 'message': 'Salary slip not found.'}), 404
+
+    existing = slips[index]
+    updated = {
+        **existing,
+        **clean,
+        'updatedAt': datetime.now().isoformat(timespec='seconds'),
+        'updatedBy': get_candidate_user()
+    }
+    slips[index] = updated
+    save_candidate_salary_slips(slips)
+    return jsonify({'success': True, 'message': 'Salary slip updated successfully.', 'salarySlip': updated})
+
+
+@app.route('/api/candidate/salary-slips/<int:slip_id>', methods=['DELETE'])
+@candidate_login_required
+def candidate_salary_slip_delete_api(slip_id):
+    slips = load_candidate_salary_slips()
+    new_slips = [row for row in slips if int(row.get('id', 0) or 0) != slip_id]
+    if len(new_slips) == len(slips):
+        return jsonify({'success': False, 'message': 'Salary slip not found.'}), 404
+    save_candidate_salary_slips(new_slips)
+    return jsonify({'success': True, 'message': 'Salary slip deleted successfully.'})
 
 
 @app.route('/dashboard')
@@ -2955,3 +3070,5 @@ if __name__ == '__main__':
         else:
 
             raise
+
+
