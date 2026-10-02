@@ -20,6 +20,10 @@ import hashlib
 
 import hmac
 
+import tempfile
+
+import threading
+
 from io import BytesIO
 
 from reportlab.pdfgen import canvas
@@ -67,6 +71,9 @@ CHEQUE_SECTION_MARKER = 'CHEQUE DEPOSITS'
 ALLOWED_CHEQUE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
 
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
+
+# Serialize Accounts Excel reads/writes so simultaneous requests cannot overwrite each other.
+RECORD_IO_LOCK = threading.RLock()
 
 
 
@@ -678,6 +685,216 @@ def parse_amount(value, default=0):
 
 
 
+def _normalise_record_date(value):
+    """Return record dates as YYYY-MM-DD where possible."""
+    if value is None:
+        return ''
+    if hasattr(value, 'strftime'):
+        try:
+            return value.strftime('%Y-%m-%d')
+        except Exception:
+            pass
+    raw = str(value).strip()
+    if not raw:
+        return ''
+    for fmt in ('%Y-%m-%d', '%Y-%m-%d %H:%M:%S', '%d/%m/%Y', '%d-%m-%Y'):
+        try:
+            return datetime.strptime(raw, fmt).strftime('%Y-%m-%d')
+        except Exception:
+            continue
+    try:
+        return datetime.fromisoformat(raw).strftime('%Y-%m-%d')
+    except Exception:
+        return raw
+
+
+def _record_date_sort_key(value):
+    normalised = _normalise_record_date(value)
+    try:
+        return datetime.strptime(normalised, '%Y-%m-%d')
+    except Exception:
+        return datetime(9999, 12, 31)
+
+
+def _normalise_import_header(value):
+    """Normalise an uploaded Excel column heading for reliable matching."""
+    text = str(value or '').strip().lower()
+    for ch in ('_', '-', '.', ':', '/', '\\', '(', ')'):
+        text = text.replace(ch, ' ')
+    return ' '.join(text.split())
+
+
+EXCEL_IMPORT_HEADER_ALIASES = {
+    'date': {
+        'date', 'transaction date', 'entry date', 'payment date', 'record date',
+    },
+    'subject': {
+        'subject', 'description', 'details', 'detail', 'particulars', 'particular',
+        'narration', 'purpose', 'remarks', 'remark',
+    },
+    'pass_no': {
+        'pass no', 'pass number', 'passport no', 'passport number', 'passport',
+        'pass no.', 'passport no.',
+    },
+    'in_payment': {
+        'in payment', 'in', 'credit', 'income', 'received', 'receipt', 'cash in',
+        'deposit', 'amount in',
+    },
+    'out_payment': {
+        'out payment', 'out', 'debit', 'expense', 'paid', 'payment', 'cash out',
+        'withdrawal', 'amount out',
+    },
+    'sub_agent': {
+        'sub agent', 'subagent', 'sub-agent', 'agent', 'agent name',
+    },
+}
+
+
+def _match_import_header(value):
+    normalised = _normalise_import_header(value)
+    if not normalised:
+        return None
+    for canonical, aliases in EXCEL_IMPORT_HEADER_ALIASES.items():
+        normalised_aliases = {_normalise_import_header(alias) for alias in aliases}
+        if normalised in normalised_aliases:
+            return canonical
+    return None
+
+
+def _parse_excel_import_amount(value):
+    """Parse common Excel/currency amount formats without failing the whole import."""
+    if value is None or value == '':
+        return 0.0
+    if isinstance(value, (int, float)):
+        return float(value)
+    raw = str(value).strip()
+    if not raw:
+        return 0.0
+    negative = raw.startswith('(') and raw.endswith(')')
+    raw = raw.replace(',', '')
+    raw = raw.replace('Rs.', '').replace('Rs', '').replace('LKR', '').replace('lkr', '')
+    raw = raw.replace('(', '').replace(')', '').strip()
+    filtered = ''.join(ch for ch in raw if ch.isdigit() or ch in '.-')
+    if filtered in ('', '-', '.', '-.'):
+        return 0.0
+    try:
+        number = float(filtered)
+        return -abs(number) if negative else number
+    except Exception:
+        return 0.0
+
+
+def _find_excel_import_header(ws):
+    """Find the best header row in the first 20 rows and return its field mapping."""
+    best = None
+    max_scan = min(ws.max_row or 0, 20)
+    for row_no in range(1, max_scan + 1):
+        values = [cell.value for cell in ws[row_no]]
+        mapping = {}
+        for col_idx, value in enumerate(values, start=1):
+            canonical = _match_import_header(value)
+            if canonical and canonical not in mapping:
+                mapping[canonical] = col_idx
+        score = len(mapping)
+        # Date + subject are essential for Enter Records. Other fields are optional.
+        if 'date' in mapping and 'subject' in mapping:
+            candidate = (score, -row_no, row_no, mapping)
+            if best is None or candidate > best:
+                best = candidate
+    if best is None:
+        return None, {}
+    return best[2], best[3]
+
+
+def _excel_cell_value(ws, row_no, mapping, field):
+    col = mapping.get(field)
+    return ws.cell(row_no, col).value if col else None
+
+
+def _collect_normal_transactions(ws):
+    """Read every normal transaction before the cheque section without silently dropping recoverable rows."""
+    opening_row = None
+    transactions = []
+
+    for source_order, values in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        row = list(values[:9])
+        if len(row) < 9:
+            row.extend([None] * (9 - len(row)))
+
+        if str(row[0] or '').strip().upper() == CHEQUE_SECTION_MARKER:
+            break
+
+        ref_text = str(row[1] or '').strip()
+        if ref_text.upper() == 'OPENING':
+            opening_row = row
+            continue
+
+        has_transaction_data = bool(
+            ref_text
+            or str(row[2] or '').strip()
+            or str(row[3] or '').strip()
+            or str(row[4] or '').strip()
+            or parse_amount(row[5], 0)
+            or parse_amount(row[6], 0)
+            or str(row[7] or '').strip()
+        )
+
+        # A transaction is recoverable if it has a UTA reference, or at minimum a date + subject.
+        if ref_text.upper().startswith('UTA-') or (str(row[2] or '').strip() and str(row[3] or '').strip()):
+            transactions.append({
+                'source_order': source_order,
+                'row': row,
+            })
+        elif has_transaction_data:
+            # Do not erase unusual rows. Keep them if they still look like a real transaction.
+            if str(row[2] or '').strip() or str(row[3] or '').strip():
+                transactions.append({
+                    'source_order': source_order,
+                    'row': row,
+                })
+
+    return opening_row, transactions
+
+
+def _atomic_save_workbook(wb, filename):
+    """Save an Excel workbook via a temporary file, then replace the live file atomically."""
+    directory = os.path.dirname(filename) or '.'
+    os.makedirs(directory, exist_ok=True)
+    fd, temp_path = tempfile.mkstemp(prefix='.uta-save-', suffix='.xlsx', dir=directory)
+    os.close(fd)
+    try:
+        wb.save(temp_path)
+        os.replace(temp_path, filename)
+    finally:
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
+
+
+def repair_month_records_file(month_name, sync_cheques=True):
+    """Repair ordering, numbering, references and balances for one month in-place."""
+    filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
+    if not os.path.exists(filename):
+        return 0
+
+    with RECORD_IO_LOCK:
+        wb = load_workbook(filename)
+        ws = wb.active
+        remove_cheque_section(ws)
+        count = recalculate_and_sort_sheet(ws)
+        _atomic_save_workbook(wb, filename)
+        wb.close()
+        if sync_cheques:
+            month_info = load_months_data().get(month_name, {})
+            sync_cheque_deposits_to_excel(
+                month_name,
+                include_all=(month_info.get('status') == 'closed')
+            )
+        return count
+
+
 def format_amount(value):
 
     """Format amounts with comma grouping across the app."""
@@ -929,108 +1146,53 @@ def get_active_month():
 
 
 def get_next_reference_number(month_name):
-
-    """Get the next reference number for a specific month"""
-
+    """Return the next sequential UTA reference from the actual transaction count."""
     filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
-
     if not os.path.exists(filename):
-
         return 1
+    with RECORD_IO_LOCK:
+        wb = load_workbook(filename, data_only=False)
+        ws = wb.active
+        _, transactions = _collect_normal_transactions(ws)
+        wb.close()
+    return len(transactions) + 1
 
-    wb = load_workbook(filename)
-
-    ws = wb.active
-
-    max_num = 0
-
-    for row in ws.iter_rows(min_row=3, values_only=True):
-
-        if row[1] and isinstance(row[1], str) and row[1].startswith('UTA-'):
-
-            try:
-
-                num = int(row[1].split('-')[1])
-
-                max_num = max(max_num, num)
-
-            except:
-
-                continue
-
-    wb.close()
-
-    return max_num + 1
 
 
 
 def get_next_row_number(month_name):
-
-    """Get the next row number"""
-
+    """Return the next display row number after the opening-balance row."""
     filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
-
     if not os.path.exists(filename):
-
         return 2
+    with RECORD_IO_LOCK:
+        wb = load_workbook(filename, data_only=False)
+        ws = wb.active
+        _, transactions = _collect_normal_transactions(ws)
+        wb.close()
+    return len(transactions) + 2
 
-    wb = load_workbook(filename)
-
-    ws = wb.active
-
-    max_no = 0
-
-    for row in ws.iter_rows(min_row=2, values_only=True):
-
-        if row[0] and isinstance(row[0], (int, float)) and row[0] != 'OPENING':
-
-            max_no = max(max_no, int(row[0]))
-
-    wb.close()
-
-    return max_no + 1
 
 
 
 def get_current_balance(month_name):
-
-    """Get the current balance from normal transaction rows only."""
-
+    """Calculate the balance from opening balance + all normal transactions."""
     filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
-
     if not os.path.exists(filename):
-
         return 0
+    with RECORD_IO_LOCK:
+        wb = load_workbook(filename, data_only=False)
+        ws = wb.active
+        opening_row, transactions = _collect_normal_transactions(ws)
+        wb.close()
+    if opening_row is None:
+        return 0
+    balance = parse_amount(opening_row[8], 0)
+    for item in transactions:
+        row = item['row']
+        balance += parse_amount(row[5], 0) - parse_amount(row[6], 0)
+    return balance
 
-    wb = load_workbook(filename)
-
-    ws = wb.active
-
-    last_balance = 0
-
-    for row in ws.iter_rows(min_row=2, values_only=True):
-
-        if str(row[0] or '').strip().upper() == CHEQUE_SECTION_MARKER:
-
-            break
-
-        if row[1] == 'OPENING':
-
-            last_balance = float(row[8]) if row[8] else 0
-
-        elif row[8] is not None:
-
-            try:
-
-                last_balance = float(row[8]) if row[8] else 0
-
-            except Exception:
-
-                pass
-
-    wb.close()
-
-    return last_balance
 
 
 
@@ -1739,6 +1901,140 @@ def enter_records():
 
 
 
+@app.route('/preview_excel_records', methods=['POST'])
+@login_required
+def preview_excel_records():
+    """Read an uploaded Excel file in memory and return a safe import preview.
+
+    Nothing is written to the live monthly workbook here. The browser loads valid rows
+    into the existing Enter Records cards, and the normal /save_records route performs
+    the actual save so numbering, date ordering and balances use one canonical path.
+    """
+    try:
+        active_month = get_active_month()
+        if not active_month:
+            return jsonify({'success': False, 'message': 'No active month. Create or activate a month first.'}), 400
+
+        uploaded = request.files.get('excel_file')
+        if uploaded is None or not uploaded.filename:
+            return jsonify({'success': False, 'message': 'Choose an Excel file first.'}), 400
+
+        extension = os.path.splitext(uploaded.filename)[1].lower()
+        if extension not in {'.xlsx', '.xlsm'}:
+            return jsonify({
+                'success': False,
+                'message': 'Please upload an .xlsx or .xlsm Excel file. For old .xls files, open them in Excel and Save As .xlsx first.'
+            }), 400
+
+        raw = uploaded.read()
+        if not raw:
+            return jsonify({'success': False, 'message': 'The uploaded Excel file is empty.'}), 400
+
+        try:
+            wb = load_workbook(BytesIO(raw), data_only=True, read_only=True)
+        except Exception as exc:
+            return jsonify({'success': False, 'message': f'Unable to read this Excel file: {exc}'}), 400
+
+        ws = wb.active
+        header_row, mapping = _find_excel_import_header(ws)
+        if not header_row:
+            wb.close()
+            return jsonify({
+                'success': False,
+                'message': (
+                    'Could not identify the Excel headings. The sheet must contain at least Date and Subject/Description columns. '
+                    'Supported optional columns include Pass No, In Payment, Out Payment and Sub Agent.'
+                )
+            }), 400
+
+        rows = []
+        skipped_blank = 0
+        skipped_special = 0
+        max_import_rows = 500
+
+        for row_no in range(header_row + 1, ws.max_row + 1):
+            # Stop before a UTA cheque-deposit section when importing one of our exported sheets.
+            first_values = [ws.cell(row_no, col).value for col in range(1, min(ws.max_column, 3) + 1)]
+            if any(str(v or '').strip().upper() == CHEQUE_SECTION_MARKER for v in first_values):
+                break
+
+            date_raw = _excel_cell_value(ws, row_no, mapping, 'date')
+            subject_raw = _excel_cell_value(ws, row_no, mapping, 'subject')
+            pass_raw = _excel_cell_value(ws, row_no, mapping, 'pass_no')
+            in_raw = _excel_cell_value(ws, row_no, mapping, 'in_payment')
+            out_raw = _excel_cell_value(ws, row_no, mapping, 'out_payment')
+            agent_raw = _excel_cell_value(ws, row_no, mapping, 'sub_agent')
+
+            raw_values = [date_raw, subject_raw, pass_raw, in_raw, out_raw, agent_raw]
+            if all(v is None or str(v).strip() == '' for v in raw_values):
+                skipped_blank += 1
+                continue
+
+            subject_text = str(subject_raw or '').strip()
+            # Skip opening/total-style rows from a UTA workbook instead of importing them as transactions.
+            combined = ' '.join(str(v or '').strip().upper() for v in first_values + [subject_raw])
+            if 'OPENING BALANCE' in combined or combined.strip() == 'OPENING' or subject_text.upper() == 'OPENING BALANCE':
+                skipped_special += 1
+                continue
+            if subject_text.upper() in {'TOTAL', 'TOTAL AMOUNT', 'GRAND TOTAL'}:
+                skipped_special += 1
+                continue
+
+            date_value = _normalise_record_date(date_raw)
+            in_payment = _parse_excel_import_amount(in_raw)
+            out_payment = _parse_excel_import_amount(out_raw)
+            errors = []
+
+            if not date_value or _record_date_sort_key(date_value).year == 9999:
+                errors.append('Valid date required')
+            if not subject_text:
+                errors.append('Subject required')
+
+            rows.append({
+                'source_row': row_no,
+                'date': date_value if _record_date_sort_key(date_value).year != 9999 else str(date_raw or '').strip(),
+                'subject': subject_text,
+                'pass_no': str(pass_raw or '').strip(),
+                'in_payment': in_payment,
+                'out_payment': out_payment,
+                'sub_agent': str(agent_raw or '').strip(),
+                'valid': not errors,
+                'errors': errors,
+            })
+
+            if len(rows) >= max_import_rows:
+                break
+
+        wb.close()
+
+        valid_rows = [row for row in rows if row['valid']]
+        invalid_rows = [row for row in rows if not row['valid']]
+        total_in = sum(float(row['in_payment'] or 0) for row in valid_rows)
+        total_out = sum(float(row['out_payment'] or 0) for row in valid_rows)
+
+        response = jsonify({
+            'success': True,
+            'filename': secure_filename(uploaded.filename),
+            'sheet_name': ws.title,
+            'header_row': header_row,
+            'rows': rows,
+            'total_rows': len(rows),
+            'valid_count': len(valid_rows),
+            'invalid_count': len(invalid_rows),
+            'total_in': total_in,
+            'total_out': total_out,
+            'net': total_in - total_out,
+            'skipped_blank': skipped_blank,
+            'skipped_special': skipped_special,
+            'limited': len(rows) >= max_import_rows and ws.max_row > header_row + max_import_rows,
+        })
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return response
+    except Exception as e:
+        print(f'Excel import preview error: {e}')
+        return jsonify({'success': False, 'message': f'Excel import error: {str(e)}'}), 500
+
+
 @app.route('/view')
 
 @login_required
@@ -1778,654 +2074,436 @@ def view_month_records(month_name):
 
 
 @app.route('/delete_record_from_month', methods=['POST'])
-
 @login_required
-
 def delete_record_from_month():
-
-    """Delete a single record from a specific month"""
-
+    """Delete one record, then rebuild every No/UTA reference/balance safely."""
     try:
-
-        data = request.json
-
+        data = request.get_json(silent=True) or {}
         month_name = data.get('month_name')
-
-        ref_no = data.get('ref_no') or str(data.get('record_no', ''))
-
-
-
+        ref_no = str(data.get('ref_no') or data.get('record_no') or '').strip()
         if not month_name or not ref_no:
-
             return jsonify({'success': False, 'message': 'Missing required data'})
 
         filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
-
         if not os.path.exists(filename):
-
             return jsonify({'success': False, 'message': 'Month file not found'})
 
-        wb = load_workbook(filename)
+        with RECORD_IO_LOCK:
+            wb = load_workbook(filename)
+            ws = wb.active
+            remove_cheque_section(ws)
+            before_count = recalculate_and_sort_sheet(ws)
 
-        ws = wb.active
+            row_to_delete = None
+            for row_no in range(3, ws.max_row + 1):
+                if str(ws.cell(row_no, 2).value or '').strip().upper() == ref_no.upper():
+                    row_to_delete = row_no
+                    break
 
-        remove_cheque_section(ws)
-
-        row_to_delete = None
-
-        for row in range(3, ws.max_row + 1):
-
-            if str(ws.cell(row, 2).value or '').strip() == str(ref_no).strip():
-
-                row_to_delete = row
-
-                break
-
-        if row_to_delete:
+            if row_to_delete is None:
+                wb.close()
+                return jsonify({'success': False, 'message': 'Record not found. Refresh the page and try again.'}), 404
 
             create_backup('delete_record', month_name)
-
             ws.delete_rows(row_to_delete)
+            after_count = recalculate_and_sort_sheet(ws)
+            if after_count != before_count - 1:
+                wb.close()
+                raise RuntimeError('Delete integrity check failed. Nothing was saved.')
 
-
-
-            # Re-sort by date, reassign Ref Nos sequentially, and recalculate balances
-
-            recalculate_and_sort_sheet(ws)
-
-
-
-            wb.save(filename)
-
+            _atomic_save_workbook(wb, filename)
             wb.close()
-
             sync_cheque_deposits_to_excel(month_name)
 
-            return jsonify({'success': True, 'message': f'Record deleted and references re-indexed successfully!'})
-
-        else:
-
-            wb.close()
-
-            return jsonify({'success': False, 'message': 'Record not found'})
-
+        return jsonify({
+            'success': True,
+            'message': 'Record deleted. Dates, row numbers, references and balances were rebuilt successfully.',
+            'total_records': after_count,
+            'next_reference': f"UTA-{after_count + 1:02d}",
+        })
     except Exception as e:
-
         print(f"Error deleting record: {e}")
+        return jsonify({'success': False, 'message': f'Error deleting: {str(e)}'}), 500
 
-        return jsonify({'success': False, 'message': f'Error deleting: {str(e)}'})
 
 
 
 @app.route('/update_record_in_month', methods=['POST'])
-
 @login_required
-
 def update_record_in_month():
-
-    """Update a single record in a specific month"""
-
+    """Edit one record, then re-sort and rebuild references/balances without changing record count."""
     try:
-
-        data = request.json
-
+        data = request.get_json(silent=True) or {}
         month_name = data.get('month_name')
-
-        ref_no = data.get('ref_no')
-
-
+        ref_no = str(data.get('ref_no') or '').strip()
+        date_value = _normalise_record_date(data.get('date'))
+        subject = str(data.get('subject') or '').strip()
 
         if not month_name or not ref_no:
-
             return jsonify({'success': False, 'message': 'Missing required data'})
-
-
-
-        if not data.get('date') or not data.get('subject'):
-
+        if not date_value or not subject:
             return jsonify({'success': False, 'message': 'Date and Subject are required'})
-
-
+        if _record_date_sort_key(date_value).year == 9999:
+            return jsonify({'success': False, 'message': 'Invalid date'})
 
         filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
-
         if not os.path.exists(filename):
-
             return jsonify({'success': False, 'message': 'Month file not found'})
 
+        with RECORD_IO_LOCK:
+            wb = load_workbook(filename)
+            ws = wb.active
+            remove_cheque_section(ws)
+            before_count = recalculate_and_sort_sheet(ws)
 
+            row_to_update = None
+            for row_no in range(3, ws.max_row + 1):
+                if str(ws.cell(row_no, 2).value or '').strip().upper() == ref_no.upper():
+                    row_to_update = row_no
+                    break
 
-        wb = load_workbook(filename)
+            if row_to_update is None:
+                wb.close()
+                return jsonify({'success': False, 'message': 'Record not found. Refresh the page and try again.'}), 404
 
-        ws = wb.active
+            create_backup('update_record', month_name)
+            ws.cell(row_to_update, 3).value = date_value
+            ws.cell(row_to_update, 4).value = subject
+            ws.cell(row_to_update, 5).value = str(data.get('pass_no') or '').strip()
+            ws.cell(row_to_update, 6).value = parse_amount(data.get('in_payment', 0), 0)
+            ws.cell(row_to_update, 7).value = parse_amount(data.get('out_payment', 0), 0)
+            ws.cell(row_to_update, 8).value = str(data.get('sub_agent') or '').strip()
 
-        remove_cheque_section(ws)
+            after_count = recalculate_and_sort_sheet(ws)
+            if after_count != before_count:
+                wb.close()
+                raise RuntimeError('Update integrity check failed. Nothing was saved.')
 
-        row_to_update = None
-
-        for row in range(3, ws.max_row + 1):
-
-            if str(ws.cell(row, 2).value or '').strip() == str(ref_no).strip():
-
-                row_to_update = row
-
-                break
-
-
-
-        if not row_to_update:
-
+            _atomic_save_workbook(wb, filename)
             wb.close()
+            sync_cheque_deposits_to_excel(month_name)
 
-            return jsonify({'success': False, 'message': 'Record not found'})
-
-
-
-        create_backup('update_record', month_name)
-
-
-
-        ws.cell(row_to_update, 3).value = data.get('date', '')
-
-        ws.cell(row_to_update, 4).value = data.get('subject', '')
-
-        ws.cell(row_to_update, 5).value = data.get('pass_no', '')
-
-        ws.cell(row_to_update, 6).value = parse_amount(data.get('in_payment', 0))
-
-        ws.cell(row_to_update, 7).value = parse_amount(data.get('out_payment', 0))
-
-        ws.cell(row_to_update, 8).value = data.get('sub_agent', '')
-
-
-
-        # Re-sort by date, reassign Ref Nos sequentially, and recalculate balances
-
-        recalculate_and_sort_sheet(ws)
-
-
-
-        wb.save(filename)
-
-        wb.close()
-
-        sync_cheque_deposits_to_excel(month_name)
-
-        return jsonify({'success': True, 'message': 'Record updated successfully!'})
-
-
-
+        return jsonify({
+            'success': True,
+            'message': 'Record updated. Dates, row numbers, references and balances were rebuilt successfully.',
+            'total_records': after_count,
+            'next_reference': f"UTA-{after_count + 1:02d}",
+        })
     except Exception as e:
-
         print(f"Error updating record: {e}")
+        return jsonify({'success': False, 'message': f'Error updating: {str(e)}'}), 500
 
-        return jsonify({'success': False, 'message': f'Error updating: {str(e)}'})
 
 
 
 @app.route('/get_month_records/<month_name>')
-
 @login_required
-
 def get_month_records(month_name):
-
-    """Get normal transaction records for a specific month."""
-
+    """Return a repaired, canonical list of normal transactions for a month."""
     try:
-
         filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
-
         if not os.path.exists(filename):
+            return jsonify({'records': [], 'next_reference': 'UTA-01'})
 
-            return jsonify({'records': []})
+        # Repair legacy gaps/misaligned row numbers before displaying or editing them.
+        repair_month_records_file(month_name)
 
-        wb = load_workbook(filename)
+        with RECORD_IO_LOCK:
+            wb = load_workbook(filename, data_only=False)
+            ws = wb.active
+            records = []
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                if str(row[0] or '').strip().upper() == CHEQUE_SECTION_MARKER:
+                    break
+                ref_text = str(row[1] or '').strip()
+                if ref_text.upper() == 'OPENING':
+                    continue
+                if ref_text.upper().startswith('UTA-'):
+                    records.append({
+                        'no': int(row[0]) if isinstance(row[0], (int, float)) else len(records) + 2,
+                        'ref_no': ref_text,
+                        'date': _normalise_record_date(row[2]),
+                        'subject': row[3] or '',
+                        'pass_no': row[4] or '',
+                        'in_payment': parse_amount(row[5], 0),
+                        'out_payment': parse_amount(row[6], 0),
+                        'sub_agent': row[7] or '',
+                        'balance': parse_amount(row[8], 0),
+                    })
+            wb.close()
 
-        ws = wb.active
-
-        records = []
-
-        for row in ws.iter_rows(min_row=3, values_only=True):
-
-            if str(row[0] or '').strip().upper() == CHEQUE_SECTION_MARKER:
-
-                break
-
-            if row[0] and row[1] and str(row[1]).startswith('UTA-'):
-
-                records.append({
-
-                    'no': row[0], 'ref_no': row[1] or '', 'date': str(row[2]) if row[2] else '',
-
-                    'subject': row[3] or '', 'pass_no': row[4] or '',
-
-                    'in_payment': float(row[5]) if row[5] else 0,
-
-                    'out_payment': float(row[6]) if row[6] else 0,
-
-                    'sub_agent': row[7] or '', 'balance': float(row[8]) if row[8] else 0
-
-                })
-
-        wb.close()
-
-        return jsonify({'records': records})
-
+        response = jsonify({
+            'records': records,
+            'next_reference': f"UTA-{len(records) + 1:02d}",
+        })
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return response
     except Exception as e:
-
         print(f"Error getting records: {e}")
+        return jsonify({'records': [], 'error': str(e)}), 500
 
-        return jsonify({'records': [], 'error': str(e)})
 
 
 
 def recalculate_and_sort_sheet(ws):
+    """Canonicalise all normal transactions: date order, sequential No/Ref and balances.
 
-    """Sort normal transactions, renumber references and recalculate balances."""
-
-    opening_row_data = None
-
-    transaction_rows = []
-
-    for row in ws.iter_rows(min_row=2, values_only=True):
-
-        row = list(row)
-
-        if str(row[0] or '').strip().upper() == CHEQUE_SECTION_MARKER:
-
-            break
-
-        if row[1] == 'OPENING':
-
-            opening_row_data = row
-
-        elif row[0] is not None and row[1] and str(row[1]).startswith('UTA-'):
-
-            transaction_rows.append(row)
-
+    The old implementation only kept rows that already had both a row number and a
+    UTA reference. That could silently drop recoverable records. This version reads
+    transactions defensively, then rebuilds the normal section from one canonical list.
+    """
+    opening_row_data, transaction_items = _collect_normal_transactions(ws)
     if opening_row_data is None:
+        raise ValueError('Opening balance row is missing. Save cancelled to protect existing data.')
 
-        return
+    transaction_items.sort(
+        key=lambda item: (_record_date_sort_key(item['row'][2]), item['source_order'])
+    )
 
-    def parse_date_safe(row):
+    if ws.max_row >= 2:
+        ws.delete_rows(2, ws.max_row - 1)
 
-        try:
-
-            date_val = row[2]
-
-            if isinstance(date_val, str):
-
-                return datetime.strptime(date_val, '%Y-%m-%d')
-
-            if hasattr(date_val, 'year'):
-
-                return datetime(date_val.year, date_val.month, date_val.day)
-
-        except Exception:
-
-            pass
-
-        return datetime(9999, 12, 31)
-
-    transaction_rows.sort(key=parse_date_safe)
-
-    ws.delete_rows(2, ws.max_row)
-
-    ws.append(opening_row_data)
+    opening_balance = parse_amount(opening_row_data[8], 0)
+    opening_date = _normalise_record_date(opening_row_data[2])
+    ws.append([
+        1,
+        'OPENING',
+        opening_date,
+        opening_row_data[3] or 'OPENING BALANCE',
+        opening_row_data[4] or '',
+        parse_amount(opening_row_data[5], 0),
+        parse_amount(opening_row_data[6], 0),
+        opening_row_data[7] or '',
+        opening_balance,
+    ])
 
     opening_row_idx = ws.max_row
-
-    opening_fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
-
-    opening_font = Font(bold=True, color="2E7D32")
-
+    opening_fill = PatternFill(start_color='E8F5E9', end_color='E8F5E9', fill_type='solid')
+    opening_font = Font(bold=True, color='2E7D32')
     for col in range(1, 10):
-
         ws.cell(opening_row_idx, col).fill = opening_fill
-
         ws.cell(opening_row_idx, col).font = opening_font
-
     for col in [6, 7, 9]:
-
         ws.cell(opening_row_idx, col).number_format = '#,##0'
 
-    balance = float(opening_row_data[8]) if opening_row_data[8] is not None else 0
-
-    for i, row in enumerate(transaction_rows):
-
-        in_payment = float(row[5]) if row[5] else 0
-
-        out_payment = float(row[6]) if row[6] else 0
-
-        balance = balance + in_payment - out_payment
-
-        ws.append([i + 2, f"UTA-{str(i + 1).zfill(2)}", row[2], row[3], row[4], in_payment, out_payment, row[7], balance])
-
+    balance = opening_balance
+    for index, item in enumerate(transaction_items, start=1):
+        row = item['row']
+        in_payment = parse_amount(row[5], 0)
+        out_payment = parse_amount(row[6], 0)
+        balance += in_payment - out_payment
+        ws.append([
+            index + 1,
+            f"UTA-{index:02d}",
+            _normalise_record_date(row[2]),
+            str(row[3] or '').strip(),
+            str(row[4] or '').strip(),
+            in_payment,
+            out_payment,
+            str(row[7] or '').strip(),
+            balance,
+        ])
         for col in [6, 7, 9]:
-
             ws.cell(ws.max_row, col).number_format = '#,##0'
+
+    return len(transaction_items)
+
 
 
 
 
 
 @app.route('/save_records', methods=['POST'])
-
 @login_required
-
 def save_records():
-
-    """Save records to active month sheet"""
-
+    """Save one or more records without losing or replacing existing transactions."""
     try:
-
         active_month = get_active_month()
-
         if not active_month:
-
             return jsonify({'success': False, 'message': 'No active month! Please create a new month first.'})
 
-        data = request.json
-
-        records = data.get('records', [])
-
-        if not records:
-
+        payload = request.get_json(silent=True) or {}
+        records = payload.get('records', [])
+        if not isinstance(records, list) or not records:
             return jsonify({'success': False, 'message': 'No records to save'})
 
+        cleaned_records = []
+        for index, record in enumerate(records, start=1):
+            if not isinstance(record, dict):
+                return jsonify({'success': False, 'message': f'Row {index}: invalid record data'})
+            date_value = _normalise_record_date(record.get('date'))
+            subject = str(record.get('subject') or '').strip()
+            if not date_value or not subject:
+                return jsonify({'success': False, 'message': f'Row {index}: Date and Subject are required'})
+            if _record_date_sort_key(date_value).year == 9999:
+                return jsonify({'success': False, 'message': f'Row {index}: invalid date'})
+            cleaned_records.append({
+                'date': date_value,
+                'subject': subject,
+                'pass_no': str(record.get('pass_no') or '').strip(),
+                'in_payment': parse_amount(record.get('in_payment', 0), 0),
+                'out_payment': parse_amount(record.get('out_payment', 0), 0),
+                'sub_agent': str(record.get('sub_agent') or '').strip(),
+            })
+
         filename = os.path.join(EXCEL_DIR, f"{active_month}.xlsx")
-
         if not os.path.exists(filename):
-
             return jsonify({'success': False, 'message': 'Month file not found!'})
 
-        wb = load_workbook(filename)
+        with RECORD_IO_LOCK:
+            wb = load_workbook(filename)
+            ws = wb.active
+            remove_cheque_section(ws)
 
-        ws = wb.active
+            # First repair legacy gaps so the existing record count is trustworthy.
+            before_count = recalculate_and_sort_sheet(ws)
 
-        remove_cheque_section(ws)
+            for record in cleaned_records:
+                # Reference/row/balance are deliberately temporary; the canonical rebuild below
+                # assigns them after date sorting so inserting an older date cannot overwrite data.
+                ws.append([
+                    0,
+                    'PENDING',
+                    record['date'],
+                    record['subject'],
+                    record['pass_no'],
+                    record['in_payment'],
+                    record['out_payment'],
+                    record['sub_agent'],
+                    0,
+                ])
 
-        next_ref_num = get_next_reference_number(active_month)
+            after_count = recalculate_and_sort_sheet(ws)
+            expected_count = before_count + len(cleaned_records)
+            if after_count != expected_count:
+                wb.close()
+                raise RuntimeError(
+                    f'Data integrity check failed: expected {expected_count} records, found {after_count}. Nothing was saved.'
+                )
 
-        current_balance = get_current_balance(active_month)
+            _atomic_save_workbook(wb, filename)
+            wb.close()
+            sync_cheque_deposits_to_excel(active_month)
 
-        saved_count = 0
-
-        ref_offset = 0
-
-        for record in records:
-
-            if not record.get('date') or not record.get('subject'):
-
-                continue
-
-            ref_no = f"UTA-{str(next_ref_num + ref_offset).zfill(2)}"
-
-            in_payment = parse_amount(record.get('in_payment', 0))
-
-            out_payment = parse_amount(record.get('out_payment', 0))
-
-            new_balance = current_balance + in_payment - out_payment
-
-
-
-            # Row number is a placeholder; recalculate_and_sort_sheet will fix it
-
-            row = [
-
-                0,
-
-                ref_no,
-
-                record.get('date', ''),
-
-                record.get('subject', ''),
-
-                record.get('pass_no', ''),
-
-                in_payment,
-
-                out_payment,
-
-                record.get('sub_agent', ''),
-
-                new_balance
-
-            ]
-
-            ws.append(row)
-
-            current_balance = new_balance
-
-            saved_count += 1
-
-            ref_offset += 1
-
-
-
-        # Sort all rows by date and recalculate balances in one pass
-
-        recalculate_and_sort_sheet(ws)
-
-
-
-        wb.save(filename)
-
-        wb.close()
-
-        sync_cheque_deposits_to_excel(active_month)
-
-        return jsonify({
-
+        response = jsonify({
             'success': True,
-
-            'message': f'Successfully saved {saved_count} records!',
-
-            'next_reference': f"UTA-{str(next_ref_num + saved_count).zfill(2)}"
-
+            'message': f'Successfully saved {len(cleaned_records)} record(s)!',
+            'saved_count': len(cleaned_records),
+            'total_records': after_count,
+            'next_reference': f"UTA-{after_count + 1:02d}",
         })
-
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return response
     except Exception as e:
-
         print(f"Error saving records: {e}")
+        return jsonify({'success': False, 'message': f'Error saving: {str(e)}'}), 500
 
-        return jsonify({'success': False, 'message': f'Error saving: {str(e)}'})
 
 @app.route('/get_next_reference')
-
 @login_required
-
 def get_next_reference():
-
-    """Get the next reference number for display"""
-
+    """Repair the active month if needed and return the true next sequential reference."""
     active_month = get_active_month()
-
     if not active_month:
-
         return jsonify({'next_reference': 'No Active Month'})
+    try:
+        total_records = repair_month_records_file(active_month)
+        response = jsonify({'next_reference': f"UTA-{total_records + 1:02d}"})
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return response
+    except Exception as e:
+        print(f"Error getting next reference: {e}")
+        return jsonify({'next_reference': 'Error', 'message': str(e)}), 500
 
-    next_num = get_next_reference_number(active_month)
-
-    return jsonify({'next_reference': f"UTA-{str(next_num).zfill(2)}"})
 
 
 
 @app.route('/get_stats')
-
 @login_required
-
 def get_stats():
-
-    """Get statistics for dashboard — shows active month data only."""
-
+    """Dashboard statistics for the active month using canonical transaction rows only."""
     months_data = load_months_data()
-
     total_months = len(months_data)
-
     active_month = get_active_month()
-
-
-
     total_records = 0
-
     total_in_payment = 0
-
     total_out_payment = 0
-
     total_references = 0
-
     net_balance = 0
 
-
-
     if active_month:
-
         filename = os.path.join(EXCEL_DIR, f"{active_month}.xlsx")
-
         if os.path.exists(filename):
+            repair_month_records_file(active_month)
+            with RECORD_IO_LOCK:
+                wb = load_workbook(filename, data_only=False)
+                ws = wb.active
+                opening_row, transactions = _collect_normal_transactions(ws)
+                opening_balance = parse_amount(opening_row[8], 0) if opening_row else 0
+                total_records = len(transactions)
+                total_references = len(transactions)
+                for item in transactions:
+                    row = item['row']
+                    total_in_payment += parse_amount(row[5], 0)
+                    total_out_payment += parse_amount(row[6], 0)
+                wb.close()
+                net_balance = opening_balance + total_in_payment - total_out_payment
 
-            wb = load_workbook(filename)
-
-            ws = wb.active
-
-            opening_balance = 0
-
-
-
-            for row in ws.iter_rows(min_row=2, values_only=True):
-
-                if str(row[0] or '').strip().upper() == CHEQUE_SECTION_MARKER:
-
-                    break
-
-                if row[1] == 'OPENING':
-
-                    opening_balance = float(row[8]) if row[8] else 0
-
-                elif row[0] is not None:
-
-                    total_records += 1
-
-                    total_in_payment += float(row[5]) if row[5] else 0
-
-                    total_out_payment += float(row[6]) if row[6] else 0
-
-                    if row[1] and row[1] != 'OPENING':
-
-                        total_references += 1
-
-
-
-            wb.close()
-
-            net_balance = opening_balance + total_in_payment - total_out_payment
-
-
-
-    return jsonify({
-
+    response = jsonify({
         'total_months': total_months,
-
         'total_records': total_records,
-
         'total_in_payment': total_in_payment,
-
         'total_out_payment': total_out_payment,
-
         'total_references': total_references,
-
         'net_balance': net_balance,
-
         'active_month': active_month,
-
-        'active_month_display': months_data.get(active_month, {}).get('display_name', 'None') if active_month else 'None'
-
+        'active_month_display': months_data.get(active_month, {}).get('display_name', 'None') if active_month else 'None',
     })
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return response
+
 
 
 
 @app.route('/get_month_stats/<month_name>')
-
 @login_required
-
 def get_month_stats(month_name):
-
-    """Get statistics for a specific month"""
-
+    """Statistics for one month; opening balance is read from Ref No = OPENING."""
     try:
-
         filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
-
         if not os.path.exists(filename):
-
             return jsonify({'error': 'Month not found'}), 404
 
-        wb = load_workbook(filename)
+        repair_month_records_file(month_name)
+        with RECORD_IO_LOCK:
+            wb = load_workbook(filename, data_only=False)
+            ws = wb.active
+            opening_row, transactions = _collect_normal_transactions(ws)
+            opening_balance = parse_amount(opening_row[8], 0) if opening_row else 0
+            total_in_payment = 0
+            total_out_payment = 0
+            for item in transactions:
+                row = item['row']
+                total_in_payment += parse_amount(row[5], 0)
+                total_out_payment += parse_amount(row[6], 0)
+            wb.close()
 
-        ws = wb.active
-
-        total_records = 0
-
-        total_in_payment = 0
-
-        total_out_payment = 0
-
-        opening_balance = 0
-
-        closing_balance = 0
-
-        total_references = set()
-
-        for row in ws.iter_rows(min_row=2, values_only=True):
-
-            if str(row[0] or '').strip().upper() == CHEQUE_SECTION_MARKER:
-
-                break
-
-            if row[0] == 'OPENING':
-
-                opening_balance = float(row[8]) if row[8] else 0
-
-            elif row[0] and row[0] != 'OPENING' and row[0] is not None:
-
-                total_records += 1
-
-                total_in_payment += float(row[5]) if row[5] else 0
-
-                total_out_payment += float(row[6]) if row[6] else 0
-
-                if row[1]:
-
-                    total_references.add(row[1])
-
-                closing_balance = float(row[8]) if row[8] else 0
-
-        wb.close()
-
-        return jsonify({
-
-            'total_records': total_records,
-
+        closing_balance = opening_balance + total_in_payment - total_out_payment
+        response = jsonify({
+            'total_records': len(transactions),
             'total_in_payment': total_in_payment,
-
             'total_out_payment': total_out_payment,
-
-            'total_references': len(total_references),
-
+            'total_references': len(transactions),
             'opening_balance': opening_balance,
-
             'closing_balance': closing_balance,
-
-            'net_change': closing_balance - opening_balance
-
+            'net_change': closing_balance - opening_balance,
         })
-
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return response
     except Exception as e:
-
         print(f"Error getting month stats: {e}")
-
         return jsonify({'error': str(e)}), 500
+
 
 
 
@@ -2990,42 +3068,21 @@ def delete_backup_month():
 
 
 @app.route('/download_excel/<month_name>')
-
 @login_required
-
 def download_excel(month_name):
-
-    """Download a specific month's Excel file"""
-
+    """Download a repaired month workbook."""
     try:
-
         filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
-
-        if os.path.exists(filename):
-
-            month_info = load_months_data().get(month_name, {})
-
-            sync_cheque_deposits_to_excel(month_name, include_all=(month_info.get('status') == 'closed'))
-
-            apply_excel_amount_format(filename)
-
-            return send_file(
-
-                filename, 
-
-                as_attachment=True, 
-
-                download_name=f'UTA_{month_name}.xlsx'
-
-            )
-
-        else:
-
+        if not os.path.exists(filename):
             return jsonify({'error': 'File not found'}), 404
-
+        repair_month_records_file(month_name, sync_cheques=False)
+        month_info = load_months_data().get(month_name, {})
+        sync_cheque_deposits_to_excel(month_name, include_all=(month_info.get('status') == 'closed'))
+        apply_excel_amount_format(filename)
+        return send_file(filename, as_attachment=True, download_name=f'UTA_{month_name}.xlsx')
     except Exception as e:
-
         return jsonify({'error': str(e)}), 500
+
 
 
 

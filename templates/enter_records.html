@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UTA Manpower Service - Enter Records</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=7">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=8">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -78,7 +78,29 @@
                     <!-- Dynamic form rows will be added here -->
                 </div>
 
+                <div class="entry-live-summary" id="entryLiveSummary">
+                    <div class="entry-summary-item">
+                        <span>Records</span>
+                        <strong id="entrySummaryCount">1</strong>
+                    </div>
+                    <div class="entry-summary-item in-total">
+                        <span>Total In</span>
+                        <strong id="entrySummaryIn">0</strong>
+                    </div>
+                    <div class="entry-summary-item out-total">
+                        <span>Total Out</span>
+                        <strong id="entrySummaryOut">0</strong>
+                    </div>
+                    <div class="entry-summary-item net-total">
+                        <span>Net</span>
+                        <strong id="entrySummaryNet">0</strong>
+                    </div>
+                </div>
+
                 <div class="record-footer-actions">
+                    <button type="button" class="btn-upload-inline footer-action-btn" onclick="openExcelImportModal()">
+                        <i class="fas fa-file-excel"></i> Upload Excel
+                    </button>
                     <button type="button" class="btn-add-inline" onclick="addRow()">
                         <i class="fas fa-plus-circle"></i> Add Another Record
                     </button>
@@ -91,6 +113,95 @@
                 </div>
             </div>
             
+            <div class="excel-import-modal" id="excelImportModal" aria-hidden="true">
+                <div class="excel-import-dialog" role="dialog" aria-modal="true" aria-labelledby="excelImportTitle">
+                    <div class="excel-import-header">
+                        <div>
+                            <span class="excel-import-eyebrow">BULK RECORD IMPORT</span>
+                            <h2 id="excelImportTitle"><i class="fas fa-file-excel"></i> Upload Excel</h2>
+                            <p>Upload an Excel file, review the detected records and load only valid rows into Enter Records.</p>
+                        </div>
+                        <button type="button" class="excel-import-close" onclick="closeExcelImportModal()" aria-label="Close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+
+                    <div class="excel-import-body">
+                        <div class="excel-upload-zone" id="excelUploadZone" onclick="document.getElementById('excelFileInput').click()">
+                            <input type="file" id="excelFileInput" accept=".xlsx,.xlsm" hidden>
+                            <div class="excel-upload-icon"><i class="fas fa-cloud-arrow-up"></i></div>
+                            <div>
+                                <strong>Choose or drop an Excel file</strong>
+                                <span>.xlsx or .xlsm · Maximum 10 MB</span>
+                            </div>
+                            <button type="button" class="excel-choose-btn" onclick="event.stopPropagation(); document.getElementById('excelFileInput').click()">Choose File</button>
+                        </div>
+
+                        <div class="excel-selected-file" id="excelSelectedFile" style="display:none;">
+                            <div>
+                                <i class="fas fa-file-excel"></i>
+                                <div>
+                                    <strong id="excelSelectedName">No file selected</strong>
+                                    <span id="excelSelectedSize"></span>
+                                </div>
+                            </div>
+                            <button type="button" class="excel-preview-btn" id="excelPreviewBtn" onclick="previewExcelImport()">
+                                <i class="fas fa-magnifying-glass"></i> Preview Excel
+                            </button>
+                        </div>
+
+                        <div class="excel-import-status" id="excelImportStatus" style="display:none;"></div>
+
+                        <div class="excel-preview-section" id="excelPreviewSection" style="display:none;">
+                            <div class="excel-preview-meta">
+                                <div>
+                                    <h3>Import Preview</h3>
+                                    <p id="excelPreviewMetaText">Review the detected rows before loading them.</p>
+                                </div>
+                                <div class="excel-preview-stats">
+                                    <div><span>Rows</span><strong id="excelStatRows">0</strong></div>
+                                    <div class="valid"><span>Valid</span><strong id="excelStatValid">0</strong></div>
+                                    <div class="invalid"><span>Invalid</span><strong id="excelStatInvalid">0</strong></div>
+                                    <div class="money-in"><span>Total In</span><strong id="excelStatIn">0</strong></div>
+                                    <div class="money-out"><span>Total Out</span><strong id="excelStatOut">0</strong></div>
+                                    <div class="net"><span>Net</span><strong id="excelStatNet">0</strong></div>
+                                </div>
+                            </div>
+
+                            <div class="excel-preview-table-wrap">
+                                <table class="excel-preview-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Status</th>
+                                            <th>Excel Row</th>
+                                            <th>Date</th>
+                                            <th>Subject</th>
+                                            <th>Pass No.</th>
+                                            <th>In Payment</th>
+                                            <th>Out Payment</th>
+                                            <th>Sub Agent</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="excelPreviewBody"></tbody>
+                                </table>
+                            </div>
+
+                            <div class="excel-import-note">
+                                <i class="fas fa-circle-info"></i>
+                                <span>Only valid rows will be loaded. Loading replaces the current unsaved record cards. Nothing is saved until you click <strong>Save to Excel File</strong>.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="excel-import-footer">
+                        <button type="button" class="excel-cancel-btn" onclick="closeExcelImportModal()">Cancel</button>
+                        <button type="button" class="excel-load-btn" id="excelLoadBtn" onclick="loadExcelRowsIntoForm()" disabled>
+                            <i class="fas fa-arrow-down"></i> Load Valid Records
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div id="message" class="message"></div>
         </div>
     </div>
@@ -98,11 +209,15 @@
     <script>
         let rowCount = 1;
         let nextRefNumber = 1;
+        let saveInProgress = false;
+        let excelImportPreview = null;
+        let excelImportFile = null;
 
         document.addEventListener('DOMContentLoaded', function() {
             loadNextReference();
             initializeForms();
             updateDate();
+            setupExcelImport();
         });
 
         function formatAmountValue(value) {
@@ -120,8 +235,15 @@
         function attachAmountFormatter(input) {
             input.addEventListener('input', function() {
                 this.value = formatAmountValue(this.value);
+                updateEntrySummary();
             });
             input.value = formatAmountValue(input.value);
+        }
+
+        function getLocalISODate() {
+            const now = new Date();
+            const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+            return local.toISOString().split('T')[0];
         }
 
         function updateDate() {
@@ -134,7 +256,7 @@
         }
 
         function loadNextReference() {
-            fetch('/get_next_reference')
+            fetch('/get_next_reference', { cache: 'no-store' })
                 .then(response => response.json())
                 .then(data => {
                     if (data.next_reference && data.next_reference !== 'No Active Month') {
@@ -152,14 +274,15 @@
             container.innerHTML = '';
             rowCount = 1;
             addFormCard(1);
+            updateEntrySummary();
         }
 
-        function addFormCard(rowNumber) {
+        function addFormCard(rowNumber, record = null) {
             const container = document.getElementById('formGrid');
             const card = document.createElement('div');
             card.className = 'form-card';
             card.setAttribute('data-row', rowNumber);
-            const today = new Date().toISOString().split('T')[0];
+            const today = getLocalISODate();
             
             card.innerHTML = `
                 <div class="form-card-header">
@@ -219,12 +342,23 @@
             
             container.appendChild(card);
             card.querySelectorAll(".amount-input").forEach(attachAmountFormatter);
+
+            if (record) {
+                card.querySelector('.date-input').value = record.date || today;
+                card.querySelector('.subject-input').value = record.subject || '';
+                card.querySelector('.pass-input').value = record.pass_no || '';
+                card.querySelector('.in-payment').value = formatAmountValue(record.in_payment || 0);
+                card.querySelector('.out-payment').value = formatAmountValue(record.out_payment || 0);
+                card.querySelector('.sub-agent').value = record.sub_agent || '';
+            }
+            updateEntrySummary();
         }
 
         function addRow() {
             rowCount++;
             addFormCard(rowCount);
             updateCardNumbers();
+            updateEntrySummary();
             const newCard = document.querySelector(`.form-card[data-row="${rowCount}"]`);
             if (newCard) {
                 newCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -247,6 +381,7 @@
             card.remove();
             rowCount = document.querySelectorAll('.form-card').length;
             updateCardNumbers();
+            updateEntrySummary();
         }
 
         function updateCardNumbers() {
@@ -263,81 +398,357 @@
 
         function clearRows() {
             initializeForms();
+            updateEntrySummary();
             showMessage('✓ Form cleared', 'success');
             setTimeout(() => hideMessage(), 3000);
         }
 
+        function parseCardAmount(value) {
+            const cleaned = String(value || '0').replace(/,/g, '').replace(/[^0-9.-]/g, '');
+            const number = Number(cleaned);
+            return Number.isFinite(number) ? number : 0;
+        }
+
+        function formatSummaryAmount(value) {
+            const number = Number(value || 0);
+            return number.toLocaleString('en-US', {
+                minimumFractionDigits: Number.isInteger(number) ? 0 : 2,
+                maximumFractionDigits: 2
+            });
+        }
+
+        function updateEntrySummary() {
+            const cards = Array.from(document.querySelectorAll('.form-card'));
+            let totalIn = 0;
+            let totalOut = 0;
+            cards.forEach(card => {
+                totalIn += parseCardAmount(card.querySelector('.in-payment')?.value);
+                totalOut += parseCardAmount(card.querySelector('.out-payment')?.value);
+            });
+            const countEl = document.getElementById('entrySummaryCount');
+            const inEl = document.getElementById('entrySummaryIn');
+            const outEl = document.getElementById('entrySummaryOut');
+            const netEl = document.getElementById('entrySummaryNet');
+            if (countEl) countEl.textContent = cards.length;
+            if (inEl) inEl.textContent = formatSummaryAmount(totalIn);
+            if (outEl) outEl.textContent = formatSummaryAmount(totalOut);
+            if (netEl) netEl.textContent = formatSummaryAmount(totalIn - totalOut);
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function setupExcelImport() {
+            const input = document.getElementById('excelFileInput');
+            const zone = document.getElementById('excelUploadZone');
+            if (input) {
+                input.addEventListener('change', () => {
+                    const file = input.files && input.files[0];
+                    if (file) selectExcelImportFile(file);
+                });
+            }
+            if (zone) {
+                ['dragenter', 'dragover'].forEach(eventName => {
+                    zone.addEventListener(eventName, event => {
+                        event.preventDefault();
+                        zone.classList.add('dragging');
+                    });
+                });
+                ['dragleave', 'drop'].forEach(eventName => {
+                    zone.addEventListener(eventName, event => {
+                        event.preventDefault();
+                        zone.classList.remove('dragging');
+                    });
+                });
+                zone.addEventListener('drop', event => {
+                    const file = event.dataTransfer?.files?.[0];
+                    if (!file) return;
+                    const ext = file.name.toLowerCase();
+                    if (!ext.endsWith('.xlsx') && !ext.endsWith('.xlsm')) {
+                        setExcelImportStatus('Please choose an .xlsx or .xlsm Excel file.', 'error');
+                        return;
+                    }
+                    const dt = new DataTransfer();
+                    dt.items.add(file);
+                    if (input) input.files = dt.files;
+                    selectExcelImportFile(file);
+                });
+            }
+            const modal = document.getElementById('excelImportModal');
+            if (modal) {
+                modal.addEventListener('click', event => {
+                    if (event.target === modal) closeExcelImportModal();
+                });
+            }
+            document.addEventListener('keydown', event => {
+                if (event.key === 'Escape' && modal?.classList.contains('open')) {
+                    closeExcelImportModal();
+                }
+            });
+        }
+
+        function openExcelImportModal() {
+            const modal = document.getElementById('excelImportModal');
+            if (!modal) return;
+            modal.classList.add('open');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('excel-modal-open');
+        }
+
+        function closeExcelImportModal() {
+            const modal = document.getElementById('excelImportModal');
+            if (!modal) return;
+            modal.classList.remove('open');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('excel-modal-open');
+        }
+
+        function resetExcelImportPreview() {
+            excelImportPreview = null;
+            const section = document.getElementById('excelPreviewSection');
+            const tbody = document.getElementById('excelPreviewBody');
+            const loadBtn = document.getElementById('excelLoadBtn');
+            if (section) section.style.display = 'none';
+            if (tbody) tbody.innerHTML = '';
+            if (loadBtn) loadBtn.disabled = true;
+            const status = document.getElementById('excelImportStatus');
+            if (status) status.style.display = 'none';
+        }
+
+        function selectExcelImportFile(file) {
+            excelImportFile = file;
+            resetExcelImportPreview();
+            const box = document.getElementById('excelSelectedFile');
+            const name = document.getElementById('excelSelectedName');
+            const size = document.getElementById('excelSelectedSize');
+            if (box) box.style.display = 'flex';
+            if (name) name.textContent = file.name;
+            if (size) size.textContent = `${(file.size / 1024).toFixed(file.size > 1024 * 1024 ? 0 : 1)} KB`;
+        }
+
+        function setExcelImportStatus(message, type = 'info') {
+            const status = document.getElementById('excelImportStatus');
+            if (!status) return;
+            status.className = `excel-import-status ${type}`;
+            status.innerHTML = message;
+            status.style.display = 'flex';
+        }
+
+        async function previewExcelImport() {
+            if (!excelImportFile) {
+                setExcelImportStatus('Choose an Excel file first.', 'error');
+                return;
+            }
+
+            const previewBtn = document.getElementById('excelPreviewBtn');
+            const loadBtn = document.getElementById('excelLoadBtn');
+            if (previewBtn) {
+                previewBtn.disabled = true;
+                previewBtn.dataset.original = previewBtn.innerHTML;
+                previewBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reading Excel...';
+            }
+            if (loadBtn) loadBtn.disabled = true;
+            setExcelImportStatus('<i class="fas fa-spinner fa-spin"></i> Reading and validating Excel rows...', 'loading');
+
+            try {
+                const formData = new FormData();
+                formData.append('excel_file', excelImportFile);
+                const response = await fetch('/preview_excel_records', {
+                    method: 'POST',
+                    cache: 'no-store',
+                    body: formData
+                });
+                let data = null;
+                try {
+                    data = await response.json();
+                } catch (_) {
+                    if (response.status === 413) {
+                        throw new Error('Excel file is too large. Maximum upload size is 10 MB.');
+                    }
+                    throw new Error('The server could not read the Excel file.');
+                }
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Unable to preview Excel file');
+                }
+                excelImportPreview = data;
+                renderExcelImportPreview(data);
+            } catch (error) {
+                excelImportPreview = null;
+                document.getElementById('excelPreviewSection').style.display = 'none';
+                setExcelImportStatus(`<i class="fas fa-circle-exclamation"></i> ${escapeHtml(error.message)}`, 'error');
+            } finally {
+                if (previewBtn) {
+                    previewBtn.disabled = false;
+                    previewBtn.innerHTML = previewBtn.dataset.original || '<i class="fas fa-magnifying-glass"></i> Preview Excel';
+                }
+            }
+        }
+
+        function renderExcelImportPreview(data) {
+            const section = document.getElementById('excelPreviewSection');
+            const body = document.getElementById('excelPreviewBody');
+            const loadBtn = document.getElementById('excelLoadBtn');
+            if (!section || !body) return;
+
+            document.getElementById('excelStatRows').textContent = data.total_rows || 0;
+            document.getElementById('excelStatValid').textContent = data.valid_count || 0;
+            document.getElementById('excelStatInvalid').textContent = data.invalid_count || 0;
+            document.getElementById('excelStatIn').textContent = formatSummaryAmount(data.total_in || 0);
+            document.getElementById('excelStatOut').textContent = formatSummaryAmount(data.total_out || 0);
+            document.getElementById('excelStatNet').textContent = formatSummaryAmount(data.net || 0);
+
+            const metaParts = [`${data.filename}`, `Sheet: ${data.sheet_name}`, `Header row: ${data.header_row}`];
+            if (data.skipped_special) metaParts.push(`${data.skipped_special} opening/total row(s) skipped`);
+            if (data.skipped_blank) metaParts.push(`${data.skipped_blank} blank row(s) skipped`);
+            document.getElementById('excelPreviewMetaText').textContent = metaParts.join(' · ');
+
+            body.innerHTML = (data.rows || []).map(row => {
+                const status = row.valid
+                    ? '<span class="excel-row-status valid"><i class="fas fa-check"></i> Valid</span>'
+                    : `<span class="excel-row-status invalid"><i class="fas fa-xmark"></i> ${escapeHtml((row.errors || []).join(', '))}</span>`;
+                return `
+                    <tr class="${row.valid ? 'excel-valid-row' : 'excel-invalid-row'}">
+                        <td>${status}</td>
+                        <td>${escapeHtml(row.source_row)}</td>
+                        <td>${escapeHtml(row.date)}</td>
+                        <td class="excel-subject-cell">${escapeHtml(row.subject)}</td>
+                        <td>${escapeHtml(row.pass_no)}</td>
+                        <td class="amount-cell">${formatSummaryAmount(row.in_payment || 0)}</td>
+                        <td class="amount-cell">${formatSummaryAmount(row.out_payment || 0)}</td>
+                        <td>${escapeHtml(row.sub_agent)}</td>
+                    </tr>`;
+            }).join('');
+
+            section.style.display = 'block';
+            if (loadBtn) loadBtn.disabled = !(data.valid_count > 0);
+
+            if (data.invalid_count > 0) {
+                setExcelImportStatus(
+                    `<i class="fas fa-triangle-exclamation"></i> ${data.valid_count} valid row(s) ready. ${data.invalid_count} invalid row(s) will not be loaded.`,
+                    'warning'
+                );
+            } else if (data.valid_count > 0) {
+                setExcelImportStatus(
+                    `<i class="fas fa-circle-check"></i> ${data.valid_count} valid row(s) are ready to load into Enter Records.`,
+                    'success'
+                );
+            } else {
+                setExcelImportStatus('<i class="fas fa-circle-exclamation"></i> No valid transaction rows were found.', 'error');
+            }
+        }
+
+        function loadExcelRowsIntoForm() {
+            if (!excelImportPreview) return;
+            const validRows = (excelImportPreview.rows || []).filter(row => row.valid);
+            if (!validRows.length) {
+                setExcelImportStatus('There are no valid rows to load.', 'error');
+                return;
+            }
+
+            const container = document.getElementById('formGrid');
+            container.innerHTML = '';
+            rowCount = 0;
+            validRows.forEach((record, index) => {
+                rowCount = index + 1;
+                addFormCard(rowCount, record);
+            });
+            updateCardNumbers();
+            updateEntrySummary();
+            closeExcelImportModal();
+            showMessage(
+                `✅ Loaded ${validRows.length} Excel record(s). Total In: ${formatSummaryAmount(excelImportPreview.total_in)} · Total Out: ${formatSummaryAmount(excelImportPreview.total_out)}. Review them, then click Save to Excel File.`,
+                'success'
+            );
+            const firstCard = document.querySelector('.form-card');
+            if (firstCard) firstCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
         function saveRecords() {
+            if (saveInProgress) return;
+
             const cards = document.querySelectorAll('.form-card');
             const records = [];
             let hasError = false;
-            
+
             cards.forEach((card, index) => {
                 const date = card.querySelector('.date-input').value;
                 const subject = card.querySelector('.subject-input').value.trim();
-                
+
                 if (!date || !subject) {
                     hasError = true;
                     showMessage(`❌ Row ${index + 1}: Date and Subject are required!`, 'error');
                     card.style.border = '2px solid #dc3545';
-                    setTimeout(() => {
-                        card.style.border = '';
-                    }, 3000);
+                    setTimeout(() => { card.style.border = ''; }, 3000);
                     return;
                 }
-                
-                const record = {
+
+                records.push({
                     date: date,
                     subject: subject,
                     pass_no: card.querySelector('.pass-input').value.trim(),
                     in_payment: cleanAmountValue(card.querySelector('.in-payment').value),
                     out_payment: cleanAmountValue(card.querySelector('.out-payment').value),
                     sub_agent: card.querySelector('.sub-agent').value.trim()
-                };
-                
-                records.push(record);
+                });
             });
-            
-            if (hasError) {
+
+            if (hasError || records.length === 0) {
+                if (!hasError) {
+                    showMessage('❌ No records to save', 'error');
+                    setTimeout(() => hideMessage(), 2000);
+                }
                 return;
             }
-            
-            if (records.length === 0) {
-                showMessage('❌ No records to save', 'error');
-                setTimeout(() => hideMessage(), 2000);
-                return;
+
+            saveInProgress = true;
+            const saveButton = document.querySelector('.btn-save');
+            if (saveButton) {
+                saveButton.disabled = true;
+                saveButton.dataset.originalHtml = saveButton.innerHTML;
+                saveButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
             }
-            
-            showMessage('<i class="fas fa-spinner fa-pulse"></i> Saving records to Excel file...', 'success');
-            
+
+            showMessage('<i class="fas fa-spinner fa-pulse"></i> Saving records safely...', 'success');
+
             fetch('/save_records', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                cache: 'no-store',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ records: records })
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showMessage('✅ ' + data.message, 'success');
-                    setTimeout(() => {
-                        clearRows();
-                        loadNextReference();
-                        hideMessage();
-                        setTimeout(() => {
-                            showMessage('📊 Ready for new entries!', 'success');
-                            setTimeout(() => hideMessage(), 3000);
-                        }, 1000);
-                    }, 2000);
-                } else {
-                    showMessage('❌ Error: ' + data.message, 'error');
-                    setTimeout(() => hideMessage(), 4000);
+            .then(async response => {
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Unable to save records');
                 }
+                return data;
+            })
+            .then(data => {
+                if (data.next_reference) {
+                    document.getElementById('nextRefPreview').innerHTML =
+                        `<i class="fas fa-tag"></i> Next: ${data.next_reference}`;
+                }
+                showMessage(`✅ ${data.message} Total records: ${data.total_records}`, 'success');
+                initializeForms();
+                setTimeout(loadNextReference, 250);
             })
             .catch(error => {
-                showMessage('❌ Connection Error: ' + error, 'error');
-                setTimeout(() => hideMessage(), 4000);
+                showMessage('❌ ' + error.message, 'error');
+            })
+            .finally(() => {
+                saveInProgress = false;
+                if (saveButton) {
+                    saveButton.disabled = false;
+                    if (saveButton.dataset.originalHtml) {
+                        saveButton.innerHTML = saveButton.dataset.originalHtml;
+                    }
+                }
             });
         }
 
