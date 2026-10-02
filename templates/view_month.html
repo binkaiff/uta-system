@@ -653,7 +653,7 @@
 
         function loadMonthStats() {
 
-            fetch(`/get_month_stats/${monthName}`)
+            fetch(`/get_month_stats/${monthName}`, { cache: 'no-store' })
 
                 .then(response => response.json())
 
@@ -689,7 +689,7 @@
 
         function loadRecords() {
 
-            fetch(`/get_month_records/${monthName}`)
+            fetch(`/get_month_records/${monthName}`, { cache: 'no-store' })
 
                 .then(response => response.json())
 
@@ -788,6 +788,7 @@
             if (pendingRecordDelete) {
 
                 fetch('/delete_record_from_month', {
+                    cache: 'no-store',
 
                     method: 'POST',
 
@@ -906,6 +907,7 @@
 
 
             fetch('/update_record_in_month', {
+                cache: 'no-store',
 
                 method: 'POST',
 
