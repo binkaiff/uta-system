@@ -187,11 +187,148 @@ def remove_cheque_section(ws):
 
 
 
+def _cheque_subject_matches(subject, in_payment=0, out_payment=0):
+    """Identify transaction rows that represent cheque *deposits*.
+
+    Plain 'Cheque' and explicit 'Cheque Deposit' labels are deposits. Variants such
+    as 'Cheque x4' are also accepted when money is coming IN, but outgoing cheque
+    payment labels and 'Bureau Cheque' are not turned into deposit slips.
+    """
+    text = ' '.join(str(subject or '').strip().lower().split())
+    if not text:
+        return False
+    if text == 'cheque' or 'cheque deposit' in text:
+        return True
+    return 'cheque' in text and parse_amount(in_payment, 0) > 0
+
+
+
+def _auto_cheque_deposit_id(month_name, ref_no):
+    """Create a deterministic ID so repeated imports never create duplicate auto slips."""
+    try:
+        month_code = datetime.strptime(month_name, '%B_%Y').strftime('%Y%m')
+    except Exception:
+        month_code = ''.join(ch for ch in str(month_name or '') if ch.isalnum())[:12] or 'MONTH'
+    ref_code = ''.join(ch for ch in str(ref_no or '').upper() if ch.isalnum()) or 'REF'
+    return f'AUTO-{month_code}-{ref_code}'
+
+
+
+def sync_auto_cheque_deposits_from_records(month_name):
+    """Rebuild auto cheque-deposit entries from cheque-labelled Accounts transactions.
+
+    Rules:
+    - Plain 'Cheque', explicit 'Cheque Deposit', or incoming cheque variants are detected.
+    - Every matching transaction becomes one linked cheque-deposit entry.
+    - The amount is the non-zero In Payment amount, otherwise the Out Payment amount.
+    - Auto entries are deterministic and rebuilt on every save/edit/delete/import, so
+      changed UTA references, dates and amounts stay in sync and duplicates cannot grow.
+    - Manually created OCR cheque deposits are preserved.
+    """
+    if not month_name:
+        return 0
+
+    filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
+    if not os.path.exists(filename):
+        return 0
+
+    with RECORD_IO_LOCK:
+        wb = load_workbook(filename, data_only=True)
+        ws = wb['Records'] if 'Records' in wb.sheetnames else wb.active
+        _opening, items = _collect_normal_transactions(ws)
+        wb.close()
+
+        deposits = load_cheque_deposits()
+
+        # Remove only entries previously generated from Accounts records for this month.
+        # Manual/OCR deposits remain untouched.
+        for dep_id in list(deposits.keys()):
+            entry = deposits.get(dep_id) or {}
+            if entry.get('month') == month_name and entry.get('auto_generated'):
+                del deposits[dep_id]
+
+        now_text = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        generated = 0
+
+        for item in items:
+            row = item.get('row') or []
+            if len(row) < 7:
+                continue
+
+            ref_no = str(row[1] or '').strip()
+            date_value = _normalise_record_date(row[2])
+            subject = str(row[3] or '').strip()
+            in_payment = parse_amount(row[4], 0)
+            out_payment = parse_amount(row[5], 0)
+
+            if not ref_no or not date_value or not _cheque_subject_matches(subject, in_payment, out_payment):
+                continue
+
+            # A manual deposit explicitly linked to this UTA reference takes priority.
+            manually_linked = False
+            for manual in deposits.values():
+                if manual.get('month') != month_name or manual.get('auto_generated'):
+                    continue
+                manual_ref = str(
+                    manual.get('source_ref')
+                    or manual.get('reference_number')
+                    or manual.get('transaction_id')
+                    or ''
+                ).strip().upper()
+                if manual_ref and manual_ref == ref_no.upper():
+                    manually_linked = True
+                    break
+            if manually_linked:
+                continue
+
+            amount = in_payment if in_payment != 0 else out_payment
+            direction = 'In Payment' if in_payment != 0 else 'Out Payment'
+            dep_id = _auto_cheque_deposit_id(month_name, ref_no)
+
+            deposits[dep_id] = {
+                'deposit_id': dep_id,
+                'month': month_name,
+                'date': date_value,
+                'time': '',
+                'transaction_id': ref_no,
+                'location': '',
+                'account_number': '',
+                'account_name': '',
+                'nic_number': '',
+                'contact_number': '',
+                'reference_number': ref_no,
+                'cheque_no': '',
+                'bank': '',
+                'branch': '',
+                'amount': amount,
+                'notes': f'Auto from {ref_no} · {subject} · {direction}',
+                'raw_text': '',
+                'image_filename': '',
+                'excel_added': True,
+                'auto_generated': True,
+                'source_ref': ref_no,
+                'source_subject': subject,
+                'source_in_payment': in_payment,
+                'source_out_payment': out_payment,
+                'created_by': 'System',
+                'created_at': now_text,
+                'updated_at': now_text,
+            }
+            generated += 1
+
+        save_cheque_deposits(deposits)
+        return generated
+
+
+
 
 
 def sync_cheque_deposits_to_excel(month_name, include_all=False):
 
     """Write cheque deposits below normal transactions in the SAME Records worksheet."""
+
+    # Keep automatically linked cheque slips synchronized with the canonical records.
+    sync_auto_cheque_deposits_from_records(month_name)
 
     filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
 
@@ -725,6 +862,9 @@ def _normalise_import_header(value):
 
 
 EXCEL_IMPORT_HEADER_ALIASES = {
+    'ref_no': {
+        'ref no', 'reference no', 'reference number', 'ref number', 'reference',
+    },
     'date': {
         'date', 'transaction date', 'entry date', 'payment date', 'record date',
     },
@@ -739,6 +879,9 @@ EXCEL_IMPORT_HEADER_ALIASES = {
     'out_payment': {
         'out payment', 'out', 'debit', 'expense', 'paid', 'payment', 'cash out',
         'withdrawal', 'amount out',
+    },
+    'balance': {
+        'balance', 'running balance', 'current balance', 'closing balance',
     },
 }
 
@@ -805,30 +948,62 @@ def _excel_cell_value(ws, row_no, mapping, field):
 
 
 def _record_sheet_is_legacy(ws):
-    """Return True for the old 9-column Accounts layout with Pass No/Sub Agent."""
-    headers = [_normalise_import_header(ws.cell(1, col).value) for col in range(1, min(ws.max_column, 9) + 1)]
+    """Detect the old 9-column Accounts layout from header names, not max_column.
+
+    Some historical workbooks retain formatting in columns H/I even after migration.
+    Using ws.max_column alone can therefore misclassify a correct 7-column workbook
+    and shift payment/balance values. Header-name detection is deterministic.
+    """
+    headers = [_normalise_import_header(ws.cell(1, col).value) for col in range(1, min(ws.max_column, 12) + 1)]
+    new_schema = len(headers) >= 7 and headers[:7] == [
+        'no', 'ref no', 'date', 'subject', 'in payment', 'out payment', 'balance'
+    ]
+    if new_schema:
+        return False
     return (
-        len(headers) >= 9
-        or 'pass no' in headers
+        'pass no' in headers
         or 'pass number' in headers
+        or 'passport no' in headers
         or 'sub agent' in headers
         or (len(headers) >= 9 and headers[8] == 'balance')
     )
 
 
 def _canonical_account_row(values, legacy=False):
-    """Convert either the old 9-column row or new 7-column row to one canonical layout.
+    """Convert historical/new/mixed rows to the canonical 7-column layout.
 
     Canonical columns: No, Ref No, Date, Subject, In Payment, Out Payment, Balance.
-    Old Pass No and Sub Agent values are intentionally discarded.
+    A few live workbooks went through both schemas. For a legacy-header sheet, a row
+    with a populated column I is treated as old 9-column data; otherwise a populated
+    7-column row is treated as already migrated. This prevents silent amount shifts.
     """
     row = list(values)
-    needed = 9 if legacy else 7
-    if len(row) < needed:
-        row.extend([None] * (needed - len(row)))
+    if len(row) < 9:
+        row.extend([None] * (9 - len(row)))
+
     if legacy:
-        return [row[0], row[1], row[2], row[3], row[5], row[6], row[8]]
-    return row[:7]
+        old_balance_present = row[8] not in (None, '')
+        looks_new_row = (not old_balance_present) and any(row[idx] not in (None, '') for idx in (4, 5, 6))
+        if not looks_new_row:
+            return [row[0], row[1], row[2], row[3], row[5], row[6], row[8]]
+
+    return [row[0], row[1], row[2], row[3], row[4], row[5], row[6]]
+
+
+def _month_key_from_date(value):
+    """Return internal month key (e.g. May_2026) for a valid record date."""
+    normalised = _normalise_record_date(value)
+    try:
+        return datetime.strptime(normalised, '%Y-%m-%d').strftime('%B_%Y')
+    except Exception:
+        return ''
+
+
+def _month_display_from_key(month_key):
+    try:
+        return datetime.strptime(month_key, '%B_%Y').strftime('%B %Y')
+    except Exception:
+        return str(month_key or '').replace('_', ' ')
 
 
 def _collect_normal_transactions(ws):
@@ -1912,11 +2087,12 @@ def enter_records():
 @app.route('/preview_excel_records', methods=['POST'])
 @login_required
 def preview_excel_records():
-    """Read an uploaded Excel file in memory and return a safe import preview.
+    """Preview an uploaded workbook without modifying live data.
 
-    Nothing is written to the live monthly workbook here. The browser loads valid rows
-    into the existing Enter Records cards, and the normal /save_records route performs
-    the actual save so numbering, date ordering and balances use one canonical path.
+    The preview also detects the transaction month. Excel imports are deliberately
+    separated from the currently active month so a May workbook cannot silently be
+    written into October. UTA full-month exports default to REPLACE mode; generic
+    spreadsheets default to APPEND mode.
     """
     try:
         active_month = get_active_month()
@@ -1944,6 +2120,7 @@ def preview_excel_records():
             return jsonify({'success': False, 'message': f'Unable to read this Excel file: {exc}'}), 400
 
         ws = wb.active
+        sheet_name = ws.title
         header_row, mapping = _find_excel_import_header(ws)
         if not header_row:
             wb.close()
@@ -1958,33 +2135,47 @@ def preview_excel_records():
         rows = []
         skipped_blank = 0
         skipped_special = 0
-        max_import_rows = 500
+        max_import_rows = 1000
+        opening_balance = None
+        opening_date = None
+        has_opening_row = False
+        has_uta_refs = False
 
         for row_no in range(header_row + 1, ws.max_row + 1):
-            # Stop before a UTA cheque-deposit section when importing one of our exported sheets.
             first_values = [ws.cell(row_no, col).value for col in range(1, min(ws.max_column, 3) + 1)]
             if any(str(v or '').strip().upper() == CHEQUE_SECTION_MARKER for v in first_values):
                 break
 
+            ref_raw = _excel_cell_value(ws, row_no, mapping, 'ref_no')
             date_raw = _excel_cell_value(ws, row_no, mapping, 'date')
             subject_raw = _excel_cell_value(ws, row_no, mapping, 'subject')
             in_raw = _excel_cell_value(ws, row_no, mapping, 'in_payment')
             out_raw = _excel_cell_value(ws, row_no, mapping, 'out_payment')
+            balance_raw = _excel_cell_value(ws, row_no, mapping, 'balance')
 
-            raw_values = [date_raw, subject_raw, in_raw, out_raw]
+            raw_values = [ref_raw, date_raw, subject_raw, in_raw, out_raw, balance_raw]
             if all(v is None or str(v).strip() == '' for v in raw_values):
                 skipped_blank += 1
                 continue
 
+            ref_text = str(ref_raw or '').strip()
             subject_text = str(subject_raw or '').strip()
-            # Skip opening/total-style rows from a UTA workbook instead of importing them as transactions.
-            combined = ' '.join(str(v or '').strip().upper() for v in first_values + [subject_raw])
-            if 'OPENING BALANCE' in combined or combined.strip() == 'OPENING' or subject_text.upper() == 'OPENING BALANCE':
+            combined = ' '.join(str(v or '').strip().upper() for v in first_values + [ref_raw, subject_raw])
+
+            if ref_text.upper() == 'OPENING' or 'OPENING BALANCE' in combined or subject_text.upper() == 'OPENING BALANCE':
+                has_opening_row = True
+                opening_date = _normalise_record_date(date_raw)
+                if balance_raw not in (None, ''):
+                    opening_balance = _parse_excel_import_amount(balance_raw)
                 skipped_special += 1
                 continue
+
             if subject_text.upper() in {'TOTAL', 'TOTAL AMOUNT', 'GRAND TOTAL'}:
                 skipped_special += 1
                 continue
+
+            if ref_text.upper().startswith('UTA-'):
+                has_uta_refs = True
 
             date_value = _normalise_record_date(date_raw)
             in_payment = _parse_excel_import_amount(in_raw)
@@ -2016,10 +2207,20 @@ def preview_excel_records():
         total_in = sum(float(row['in_payment'] or 0) for row in valid_rows)
         total_out = sum(float(row['out_payment'] or 0) for row in valid_rows)
 
+        detected_months = sorted({m for m in (_month_key_from_date(row['date']) for row in valid_rows) if m})
+        detected_month = detected_months[0] if len(detected_months) == 1 else ''
+        multiple_months = len(detected_months) > 1
+        months_data = load_months_data()
+        target_exists = bool(detected_month and detected_month in months_data)
+        full_month_export = bool(has_opening_row or has_uta_refs or 'ref_no' in mapping)
+        recommended_mode = 'replace' if full_month_export else 'append'
+        can_create_target = bool(detected_month and not target_exists and full_month_export and opening_balance is not None)
+        can_load = bool(valid_rows) and not multiple_months and (target_exists or can_create_target)
+
         response = jsonify({
             'success': True,
             'filename': secure_filename(uploaded.filename),
-            'sheet_name': ws.title,
+            'sheet_name': sheet_name,
             'header_row': header_row,
             'rows': rows,
             'total_rows': len(rows),
@@ -2030,7 +2231,20 @@ def preview_excel_records():
             'net': total_in - total_out,
             'skipped_blank': skipped_blank,
             'skipped_special': skipped_special,
-            'limited': len(rows) >= max_import_rows and ws.max_row > header_row + max_import_rows,
+            'limited': len(rows) >= max_import_rows,
+            'active_month': active_month,
+            'active_month_display': _month_display_from_key(active_month),
+            'detected_month': detected_month,
+            'detected_month_display': _month_display_from_key(detected_month) if detected_month else '',
+            'detected_months': detected_months,
+            'multiple_months': multiple_months,
+            'target_exists': target_exists,
+            'can_create_target': can_create_target,
+            'can_load': can_load,
+            'full_month_export': full_month_export,
+            'recommended_mode': recommended_mode,
+            'opening_balance': opening_balance,
+            'opening_date': opening_date,
         })
         response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
         return response
@@ -2066,6 +2280,9 @@ def view_month_records(month_name):
     if month_name not in months_data:
 
         return "Month not found", 404
+
+    # Refresh cheque slips from cheque-labelled transaction rows before rendering.
+    sync_auto_cheque_deposits_from_records(month_name)
 
     return render_template('view_month.html', 
 
@@ -2320,7 +2537,12 @@ def recalculate_and_sort_sheet(ws):
 @app.route('/save_records', methods=['POST'])
 @login_required
 def save_records():
-    """Save one or more records without losing or replacing existing transactions."""
+    """Save manual rows or an Excel import with strict count verification.
+
+    Manual entry always appends to the active month. Excel import may target the month
+    detected from its dates. A UTA full-month export can REPLACE the normal transaction
+    section exactly, which is the safe recovery path for restoring historical sheets.
+    """
     try:
         active_month = get_active_month()
         if not active_month:
@@ -2331,7 +2553,13 @@ def save_records():
         if not isinstance(records, list) or not records:
             return jsonify({'success': False, 'message': 'No records to save'})
 
+        source = str(payload.get('source') or 'manual').strip().lower()
+        import_mode = str(payload.get('import_mode') or 'append').strip().lower()
+        if import_mode not in {'append', 'replace'}:
+            import_mode = 'append'
+
         cleaned_records = []
+        record_months = set()
         for index, record in enumerate(records, start=1):
             if not isinstance(record, dict):
                 return jsonify({'success': False, 'message': f'Row {index}: invalid record data'})
@@ -2341,6 +2569,9 @@ def save_records():
                 return jsonify({'success': False, 'message': f'Row {index}: Date and Subject are required'})
             if _record_date_sort_key(date_value).year == 9999:
                 return jsonify({'success': False, 'message': f'Row {index}: invalid date'})
+            month_key = _month_key_from_date(date_value)
+            if month_key:
+                record_months.add(month_key)
             cleaned_records.append({
                 'date': date_value,
                 'subject': subject,
@@ -2348,54 +2579,118 @@ def save_records():
                 'out_payment': parse_amount(record.get('out_payment', 0), 0),
             })
 
-        filename = os.path.join(EXCEL_DIR, f"{active_month}.xlsx")
+        if source == 'excel_import':
+            if len(record_months) != 1:
+                return jsonify({'success': False, 'message': 'Excel import must contain records from one month only.'}), 400
+            detected_month = next(iter(record_months))
+            requested_target = str(payload.get('target_month') or '').strip()
+            if requested_target and requested_target != detected_month:
+                return jsonify({
+                    'success': False,
+                    'message': f'Import month mismatch: rows are {_month_display_from_key(detected_month)}, not {_month_display_from_key(requested_target)}.'
+                }), 400
+            target_month = detected_month
+        else:
+            target_month = active_month
+            import_mode = 'append'
+
+        months_data = load_months_data()
+        target_created = False
+        if target_month not in months_data:
+            if source != 'excel_import' or import_mode != 'replace':
+                return jsonify({
+                    'success': False,
+                    'message': f'{_month_display_from_key(target_month)} does not exist in the system. Import a full UTA export in Replace mode or create that month first.'
+                }), 400
+
+            opening_balance_raw = payload.get('import_opening_balance')
+            opening_date = _normalise_record_date(payload.get('import_opening_date')) or cleaned_records[0]['date']
+            if opening_balance_raw is None:
+                return jsonify({'success': False, 'message': 'Opening balance was not found in the uploaded full-month workbook.'}), 400
+            opening_balance = parse_amount(opening_balance_raw, 0)
+            create_monthly_sheet(target_month, opening_balance, opening_date)
+            months_data[target_month] = {
+                'display_name': _month_display_from_key(target_month),
+                'created_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'opening_balance': opening_balance,
+                'status': 'closed' if target_month != active_month else 'active',
+                'filename': os.path.join(EXCEL_DIR, f'{target_month}.xlsx'),
+            }
+            save_months_data(months_data)
+            target_created = True
+
+        filename = os.path.join(EXCEL_DIR, f'{target_month}.xlsx')
         if not os.path.exists(filename):
-            return jsonify({'success': False, 'message': 'Month file not found!'})
+            return jsonify({'success': False, 'message': 'Target month file not found!'})
 
         with RECORD_IO_LOCK:
             wb = load_workbook(filename)
             ws = wb.active
             remove_cheque_section(ws)
 
-            # First repair legacy gaps so the existing record count is trustworthy.
+            # Normalise the target first. This repairs old 9-column/mixed-schema files.
             before_count = recalculate_and_sort_sheet(ws)
 
-            for record in cleaned_records:
-                # Reference/row/balance are deliberately temporary; the canonical rebuild below
-                # assigns them after date sorting so inserting an older date cannot overwrite data.
-                ws.append([
-                    0,
-                    'PENDING',
-                    record['date'],
-                    record['subject'],
-                    record['in_payment'],
-                    record['out_payment'],
-                    0,
-                ])
+            if source == 'excel_import' and import_mode == 'replace':
+                opening_row, _ = _collect_normal_transactions(ws)
+                if opening_row is None:
+                    wb.close()
+                    raise RuntimeError('Opening balance row is missing. Replace cancelled.')
 
-            after_count = recalculate_and_sort_sheet(ws)
-            expected_count = before_count + len(cleaned_records)
+                uploaded_opening = payload.get('import_opening_balance')
+                opening_balance = parse_amount(uploaded_opening, opening_row[6]) if uploaded_opening is not None else parse_amount(opening_row[6], 0)
+                opening_date = _normalise_record_date(payload.get('import_opening_date')) or _normalise_record_date(opening_row[2])
+
+                # Remove all normal rows, then rebuild from the import only.
+                if ws.max_row >= 2:
+                    ws.delete_rows(2, ws.max_row - 1)
+                ws.append([1, 'OPENING', opening_date, 'OPENING BALANCE', 0, 0, opening_balance])
+
+                for record in cleaned_records:
+                    ws.append([0, 'PENDING', record['date'], record['subject'], record['in_payment'], record['out_payment'], 0])
+
+                after_count = recalculate_and_sort_sheet(ws)
+                expected_count = len(cleaned_records)
+            else:
+                for record in cleaned_records:
+                    ws.append([0, 'PENDING', record['date'], record['subject'], record['in_payment'], record['out_payment'], 0])
+                after_count = recalculate_and_sort_sheet(ws)
+                expected_count = before_count + len(cleaned_records)
+
             if after_count != expected_count:
                 wb.close()
                 raise RuntimeError(
                     f'Data integrity check failed: expected {expected_count} records, found {after_count}. Nothing was saved.'
                 )
 
+            # Verify references are perfectly sequential before the atomic replace.
+            _, verify_items = _collect_normal_transactions(ws)
+            expected_refs = [f'UTA-{i:02d}' for i in range(1, len(verify_items) + 1)]
+            actual_refs = [str(item['row'][1] or '').strip() for item in verify_items]
+            if actual_refs != expected_refs:
+                wb.close()
+                raise RuntimeError('Reference integrity check failed. Nothing was saved.')
+
             _atomic_save_workbook(wb, filename)
             wb.close()
-            sync_cheque_deposits_to_excel(active_month)
+            sync_cheque_deposits_to_excel(target_month)
 
+        mode_word = 'replaced' if (source == 'excel_import' and import_mode == 'replace') else 'saved'
         response = jsonify({
             'success': True,
-            'message': f'Successfully saved {len(cleaned_records)} record(s)!',
+            'message': f'Successfully {mode_word} {len(cleaned_records)} record(s) in {_month_display_from_key(target_month)}!',
             'saved_count': len(cleaned_records),
             'total_records': after_count,
-            'next_reference': f"UTA-{after_count + 1:02d}",
+            'next_reference': f'UTA-{after_count + 1:02d}',
+            'target_month': target_month,
+            'target_month_display': _month_display_from_key(target_month),
+            'target_created': target_created,
+            'import_mode': import_mode,
         })
         response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
         return response
     except Exception as e:
-        print(f"Error saving records: {e}")
+        print(f'Error saving records: {e}')
         return jsonify({'success': False, 'message': f'Error saving: {str(e)}'}), 500
 
 
@@ -2519,6 +2814,9 @@ def cheque_deposits_page():
 
     months_data = load_months_data()
 
+    if active_month:
+        sync_auto_cheque_deposits_from_records(active_month)
+
     deposits = get_month_cheque_deposits(active_month)
 
     return render_template(
@@ -2620,6 +2918,16 @@ def save_cheque_deposit():
             'image_filename': image_filename,
 
             'excel_added': bool(existing.get('excel_added', False)),
+
+            'auto_generated': bool(existing.get('auto_generated', False)),
+
+            'source_ref': existing.get('source_ref', ''),
+
+            'source_subject': existing.get('source_subject', ''),
+
+            'source_in_payment': existing.get('source_in_payment', 0),
+
+            'source_out_payment': existing.get('source_out_payment', 0),
 
             'created_by': existing.get('created_by') or get_accounts_user(),
 
