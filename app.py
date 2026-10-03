@@ -732,10 +732,6 @@ EXCEL_IMPORT_HEADER_ALIASES = {
         'subject', 'description', 'details', 'detail', 'particulars', 'particular',
         'narration', 'purpose', 'remarks', 'remark',
     },
-    'pass_no': {
-        'pass no', 'pass number', 'passport no', 'passport number', 'passport',
-        'pass no.', 'passport no.',
-    },
     'in_payment': {
         'in payment', 'in', 'credit', 'income', 'received', 'receipt', 'cash in',
         'deposit', 'amount in',
@@ -743,9 +739,6 @@ EXCEL_IMPORT_HEADER_ALIASES = {
     'out_payment': {
         'out payment', 'out', 'debit', 'expense', 'paid', 'payment', 'cash out',
         'withdrawal', 'amount out',
-    },
-    'sub_agent': {
-        'sub agent', 'subagent', 'sub-agent', 'agent', 'agent name',
     },
 }
 
@@ -811,19 +804,49 @@ def _excel_cell_value(ws, row_no, mapping, field):
     return ws.cell(row_no, col).value if col else None
 
 
+def _record_sheet_is_legacy(ws):
+    """Return True for the old 9-column Accounts layout with Pass No/Sub Agent."""
+    headers = [_normalise_import_header(ws.cell(1, col).value) for col in range(1, min(ws.max_column, 9) + 1)]
+    return (
+        len(headers) >= 9
+        or 'pass no' in headers
+        or 'pass number' in headers
+        or 'sub agent' in headers
+        or (len(headers) >= 9 and headers[8] == 'balance')
+    )
+
+
+def _canonical_account_row(values, legacy=False):
+    """Convert either the old 9-column row or new 7-column row to one canonical layout.
+
+    Canonical columns: No, Ref No, Date, Subject, In Payment, Out Payment, Balance.
+    Old Pass No and Sub Agent values are intentionally discarded.
+    """
+    row = list(values)
+    needed = 9 if legacy else 7
+    if len(row) < needed:
+        row.extend([None] * (needed - len(row)))
+    if legacy:
+        return [row[0], row[1], row[2], row[3], row[5], row[6], row[8]]
+    return row[:7]
+
+
 def _collect_normal_transactions(ws):
-    """Read every normal transaction before the cheque section without silently dropping recoverable rows."""
+    """Read all Accounts transactions using the new 7-column schema.
+
+    Existing 9-column workbooks are read safely and automatically migrated the next
+    time the sheet is repaired/saved. Pass No and Sub Agent are dropped permanently.
+    """
     opening_row = None
     transactions = []
+    legacy = _record_sheet_is_legacy(ws)
 
     for source_order, values in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-        row = list(values[:9])
-        if len(row) < 9:
-            row.extend([None] * (9 - len(row)))
-
-        if str(row[0] or '').strip().upper() == CHEQUE_SECTION_MARKER:
+        raw = list(values)
+        if raw and str(raw[0] or '').strip().upper() == CHEQUE_SECTION_MARKER:
             break
 
+        row = _canonical_account_row(raw, legacy=legacy)
         ref_text = str(row[1] or '').strip()
         if ref_text.upper() == 'OPENING':
             opening_row = row
@@ -833,25 +856,14 @@ def _collect_normal_transactions(ws):
             ref_text
             or str(row[2] or '').strip()
             or str(row[3] or '').strip()
-            or str(row[4] or '').strip()
+            or parse_amount(row[4], 0)
             or parse_amount(row[5], 0)
-            or parse_amount(row[6], 0)
-            or str(row[7] or '').strip()
         )
 
-        # A transaction is recoverable if it has a UTA reference, or at minimum a date + subject.
         if ref_text.upper().startswith('UTA-') or (str(row[2] or '').strip() and str(row[3] or '').strip()):
-            transactions.append({
-                'source_order': source_order,
-                'row': row,
-            })
-        elif has_transaction_data:
-            # Do not erase unusual rows. Keep them if they still look like a real transaction.
-            if str(row[2] or '').strip() or str(row[3] or '').strip():
-                transactions.append({
-                    'source_order': source_order,
-                    'row': row,
-                })
+            transactions.append({'source_order': source_order, 'row': row})
+        elif has_transaction_data and (str(row[2] or '').strip() or str(row[3] or '').strip()):
+            transactions.append({'source_order': source_order, 'row': row})
 
     return opening_row, transactions
 
@@ -937,7 +949,7 @@ def apply_excel_amount_format(filename):
 
     for row_no in range(2, normal_end + 1):
 
-        for col in [6, 7, 9]:
+        for col in [5, 6, 7]:
 
             cell = ws.cell(row_no, col)
 
@@ -991,7 +1003,7 @@ def create_monthly_sheet(month_name, opening_balance, opening_date=None):
 
     # Add headers
 
-    headers = ['No', 'Ref No', 'Date', 'Subject', 'Pass No', 'In Payment', 'Out Payment', 'Sub Agent', 'Balance']
+    headers = ['No', 'Ref No', 'Date', 'Subject', 'In Payment', 'Out Payment', 'Balance']
 
     ws.append(headers)
 
@@ -1017,7 +1029,7 @@ def create_monthly_sheet(month_name, opening_balance, opening_date=None):
 
         opening_date = datetime.now().strftime("%Y-%m-%d")
 
-    ws.append([1, 'OPENING', opening_date, 'OPENING BALANCE', '', 0, 0, '', opening_balance])
+    ws.append([1, 'OPENING', opening_date, 'OPENING BALANCE', 0, 0, opening_balance])
 
     # Style opening balance row
 
@@ -1025,7 +1037,7 @@ def create_monthly_sheet(month_name, opening_balance, opening_date=None):
 
     opening_font = Font(bold=True, color="2E7D32")
 
-    for col in range(1, 10):
+    for col in range(1, 8):
 
         cell = ws.cell(2, col)
 
@@ -1033,7 +1045,7 @@ def create_monthly_sheet(month_name, opening_balance, opening_date=None):
 
         cell.font = opening_font
 
-    for col in [6, 7, 9]:
+    for col in [5, 6, 7]:
 
         ws.cell(2, col).number_format = '#,##0'
 
@@ -1049,15 +1061,11 @@ def create_monthly_sheet(month_name, opening_balance, opening_date=None):
 
     ws.column_dimensions['D'].width = 30
 
-    ws.column_dimensions['E'].width = 12
+    ws.column_dimensions['E'].width = 15
 
     ws.column_dimensions['F'].width = 15
 
     ws.column_dimensions['G'].width = 15
-
-    ws.column_dimensions['H'].width = 15
-
-    ws.column_dimensions['I'].width = 15
 
     wb.save(filename)
 
@@ -1187,10 +1195,10 @@ def get_current_balance(month_name):
         wb.close()
     if opening_row is None:
         return 0
-    balance = parse_amount(opening_row[8], 0)
+    balance = parse_amount(opening_row[6], 0)
     for item in transactions:
         row = item['row']
-        balance += parse_amount(row[5], 0) - parse_amount(row[6], 0)
+        balance += parse_amount(row[4], 0) - parse_amount(row[5], 0)
     return balance
 
 
@@ -1943,7 +1951,7 @@ def preview_excel_records():
                 'success': False,
                 'message': (
                     'Could not identify the Excel headings. The sheet must contain at least Date and Subject/Description columns. '
-                    'Supported optional columns include Pass No, In Payment, Out Payment and Sub Agent.'
+                    'Supported optional columns include In Payment and Out Payment.'
                 )
             }), 400
 
@@ -1960,12 +1968,10 @@ def preview_excel_records():
 
             date_raw = _excel_cell_value(ws, row_no, mapping, 'date')
             subject_raw = _excel_cell_value(ws, row_no, mapping, 'subject')
-            pass_raw = _excel_cell_value(ws, row_no, mapping, 'pass_no')
             in_raw = _excel_cell_value(ws, row_no, mapping, 'in_payment')
             out_raw = _excel_cell_value(ws, row_no, mapping, 'out_payment')
-            agent_raw = _excel_cell_value(ws, row_no, mapping, 'sub_agent')
 
-            raw_values = [date_raw, subject_raw, pass_raw, in_raw, out_raw, agent_raw]
+            raw_values = [date_raw, subject_raw, in_raw, out_raw]
             if all(v is None or str(v).strip() == '' for v in raw_values):
                 skipped_blank += 1
                 continue
@@ -1994,10 +2000,8 @@ def preview_excel_records():
                 'source_row': row_no,
                 'date': date_value if _record_date_sort_key(date_value).year != 9999 else str(date_raw or '').strip(),
                 'subject': subject_text,
-                'pass_no': str(pass_raw or '').strip(),
                 'in_payment': in_payment,
                 'out_payment': out_payment,
-                'sub_agent': str(agent_raw or '').strip(),
                 'valid': not errors,
                 'errors': errors,
             })
@@ -2169,10 +2173,8 @@ def update_record_in_month():
             create_backup('update_record', month_name)
             ws.cell(row_to_update, 3).value = date_value
             ws.cell(row_to_update, 4).value = subject
-            ws.cell(row_to_update, 5).value = str(data.get('pass_no') or '').strip()
-            ws.cell(row_to_update, 6).value = parse_amount(data.get('in_payment', 0), 0)
-            ws.cell(row_to_update, 7).value = parse_amount(data.get('out_payment', 0), 0)
-            ws.cell(row_to_update, 8).value = str(data.get('sub_agent') or '').strip()
+            ws.cell(row_to_update, 5).value = parse_amount(data.get('in_payment', 0), 0)
+            ws.cell(row_to_update, 6).value = parse_amount(data.get('out_payment', 0), 0)
 
             after_count = recalculate_and_sort_sheet(ws)
             if after_count != before_count:
@@ -2224,11 +2226,9 @@ def get_month_records(month_name):
                         'ref_no': ref_text,
                         'date': _normalise_record_date(row[2]),
                         'subject': row[3] or '',
-                        'pass_no': row[4] or '',
-                        'in_payment': parse_amount(row[5], 0),
-                        'out_payment': parse_amount(row[6], 0),
-                        'sub_agent': row[7] or '',
-                        'balance': parse_amount(row[8], 0),
+                        'in_payment': parse_amount(row[4], 0),
+                        'out_payment': parse_amount(row[5], 0),
+                        'balance': parse_amount(row[6], 0),
                     })
             wb.close()
 
@@ -2246,68 +2246,72 @@ def get_month_records(month_name):
 
 
 def recalculate_and_sort_sheet(ws):
-    """Canonicalise all normal transactions: date order, sequential No/Ref and balances.
+    """Canonicalise Accounts records into the 7-column layout.
 
-    The old implementation only kept rows that already had both a row number and a
-    UTA reference. That could silently drop recoverable records. This version reads
-    transactions defensively, then rebuilds the normal section from one canonical list.
+    Columns are permanently: No, Ref No, Date, Subject, In Payment, Out Payment, Balance.
+    Legacy Pass No/Sub Agent columns are removed during this rebuild.
     """
     opening_row_data, transaction_items = _collect_normal_transactions(ws)
     if opening_row_data is None:
         raise ValueError('Opening balance row is missing. Save cancelled to protect existing data.')
 
-    transaction_items.sort(
-        key=lambda item: (_record_date_sort_key(item['row'][2]), item['source_order'])
-    )
+    transaction_items.sort(key=lambda item: (_record_date_sort_key(item['row'][2]), item['source_order']))
 
     if ws.max_row >= 2:
         ws.delete_rows(2, ws.max_row - 1)
+    if ws.max_column > 7:
+        ws.delete_cols(8, ws.max_column - 7)
 
-    opening_balance = parse_amount(opening_row_data[8], 0)
+    headers = ['No', 'Ref No', 'Date', 'Subject', 'In Payment', 'Out Payment', 'Balance']
+    header_fill = PatternFill(start_color='1A1A2E', end_color='1A1A2E', fill_type='solid')
+    header_font = Font(bold=True, color='FFFFFF')
+    for col, header in enumerate(headers, start=1):
+        cell = ws.cell(1, col)
+        cell.value = header
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+
+    opening_balance = parse_amount(opening_row_data[6], 0)
     opening_date = _normalise_record_date(opening_row_data[2])
-    ws.append([
-        1,
-        'OPENING',
-        opening_date,
-        opening_row_data[3] or 'OPENING BALANCE',
-        opening_row_data[4] or '',
-        parse_amount(opening_row_data[5], 0),
-        parse_amount(opening_row_data[6], 0),
-        opening_row_data[7] or '',
-        opening_balance,
-    ])
+    ws.append([1, 'OPENING', opening_date, opening_row_data[3] or 'OPENING BALANCE', 0, 0, opening_balance])
 
     opening_row_idx = ws.max_row
     opening_fill = PatternFill(start_color='E8F5E9', end_color='E8F5E9', fill_type='solid')
     opening_font = Font(bold=True, color='2E7D32')
-    for col in range(1, 10):
+    for col in range(1, 8):
         ws.cell(opening_row_idx, col).fill = opening_fill
         ws.cell(opening_row_idx, col).font = opening_font
-    for col in [6, 7, 9]:
+    for col in [5, 6, 7]:
         ws.cell(opening_row_idx, col).number_format = '#,##0'
 
     balance = opening_balance
     for index, item in enumerate(transaction_items, start=1):
         row = item['row']
-        in_payment = parse_amount(row[5], 0)
-        out_payment = parse_amount(row[6], 0)
+        in_payment = parse_amount(row[4], 0)
+        out_payment = parse_amount(row[5], 0)
         balance += in_payment - out_payment
         ws.append([
             index + 1,
             f"UTA-{index:02d}",
             _normalise_record_date(row[2]),
             str(row[3] or '').strip(),
-            str(row[4] or '').strip(),
             in_payment,
             out_payment,
-            str(row[7] or '').strip(),
             balance,
         ])
-        for col in [6, 7, 9]:
+        for col in [5, 6, 7]:
             ws.cell(ws.max_row, col).number_format = '#,##0'
 
-    return len(transaction_items)
+    ws.column_dimensions['A'].width = 8
+    ws.column_dimensions['B'].width = 12
+    ws.column_dimensions['C'].width = 12
+    ws.column_dimensions['D'].width = 34
+    ws.column_dimensions['E'].width = 16
+    ws.column_dimensions['F'].width = 16
+    ws.column_dimensions['G'].width = 16
 
+    return len(transaction_items)
 
 
 
@@ -2340,10 +2344,8 @@ def save_records():
             cleaned_records.append({
                 'date': date_value,
                 'subject': subject,
-                'pass_no': str(record.get('pass_no') or '').strip(),
                 'in_payment': parse_amount(record.get('in_payment', 0), 0),
                 'out_payment': parse_amount(record.get('out_payment', 0), 0),
-                'sub_agent': str(record.get('sub_agent') or '').strip(),
             })
 
         filename = os.path.join(EXCEL_DIR, f"{active_month}.xlsx")
@@ -2366,10 +2368,8 @@ def save_records():
                     'PENDING',
                     record['date'],
                     record['subject'],
-                    record['pass_no'],
                     record['in_payment'],
                     record['out_payment'],
-                    record['sub_agent'],
                     0,
                 ])
 
@@ -2439,13 +2439,13 @@ def get_stats():
                 wb = load_workbook(filename, data_only=False)
                 ws = wb.active
                 opening_row, transactions = _collect_normal_transactions(ws)
-                opening_balance = parse_amount(opening_row[8], 0) if opening_row else 0
+                opening_balance = parse_amount(opening_row[6], 0) if opening_row else 0
                 total_records = len(transactions)
                 total_references = len(transactions)
                 for item in transactions:
                     row = item['row']
-                    total_in_payment += parse_amount(row[5], 0)
-                    total_out_payment += parse_amount(row[6], 0)
+                    total_in_payment += parse_amount(row[4], 0)
+                    total_out_payment += parse_amount(row[5], 0)
                 wb.close()
                 net_balance = opening_balance + total_in_payment - total_out_payment
 
@@ -2479,13 +2479,13 @@ def get_month_stats(month_name):
             wb = load_workbook(filename, data_only=False)
             ws = wb.active
             opening_row, transactions = _collect_normal_transactions(ws)
-            opening_balance = parse_amount(opening_row[8], 0) if opening_row else 0
+            opening_balance = parse_amount(opening_row[6], 0) if opening_row else 0
             total_in_payment = 0
             total_out_payment = 0
             for item in transactions:
                 row = item['row']
-                total_in_payment += parse_amount(row[5], 0)
-                total_out_payment += parse_amount(row[6], 0)
+                total_in_payment += parse_amount(row[4], 0)
+                total_out_payment += parse_amount(row[5], 0)
             wb.close()
 
         closing_balance = opening_balance + total_in_payment - total_out_payment

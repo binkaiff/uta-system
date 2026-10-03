@@ -347,15 +347,11 @@
 
                                 <th>Subject</th>
 
-                                <th width="110">Pass No</th>
+                                <th width="140">In Payment</th>
 
-                                <th width="130">In Payment</th>
+                                <th width="140">Out Payment</th>
 
-                                <th width="130">Out Payment</th>
-
-                                <th width="150">Sub Agent</th>
-
-                                <th width="130">Balance</th>
+                                <th width="150">Balance</th>
 
                             </tr>
 
@@ -523,14 +519,6 @@
 
             <div class="input-group">
 
-                <label>Pass No</label>
-
-                <input type="text" id="editPassNo" class="modal-input" placeholder="Enter pass no">
-
-            </div>
-
-            <div class="input-group">
-
                 <label>In Payment</label>
 
                 <input type="text" id="editInPayment" class="modal-input" placeholder="0" inputmode="decimal">
@@ -542,14 +530,6 @@
                 <label>Out Payment</label>
 
                 <input type="text" id="editOutPayment" class="modal-input" placeholder="0" inputmode="decimal">
-
-            </div>
-
-            <div class="input-group">
-
-                <label>Sub Agent</label>
-
-                <input type="text" id="editSubAgent" class="modal-input" placeholder="Enter sub agent">
 
             </div>
 
@@ -757,13 +737,9 @@
 
                     <td class="subject-cell">${escapeHtml(record.subject || '')}</td>
 
-                    <td class="pass-cell">${escapeHtml(record.pass_no || '') || '-'}</td>
-
                     <td class="payment-in-cell"><i class="fas fa-arrow-down"></i> ${formatCurrency(record.in_payment)}</td>
 
                     <td class="payment-out-cell"><i class="fas fa-arrow-up"></i> ${formatCurrency(record.out_payment)}</td>
-
-                    <td class="agent-cell">${escapeHtml(record.sub_agent || '') || '-'}</td>
 
                     <td class="balance-cell">${formatCurrency(record.balance)}</td>
 
@@ -870,13 +846,9 @@
 
             document.getElementById('editSubject').value = record.subject || '';
 
-            document.getElementById('editPassNo').value = record.pass_no || '';
-
             document.getElementById('editInPayment').value = record.in_payment ? formatAmountValue(record.in_payment) : '';
 
             document.getElementById('editOutPayment').value = record.out_payment ? formatAmountValue(record.out_payment) : '';
-
-            document.getElementById('editSubAgent').value = record.sub_agent || '';
 
             document.getElementById('editRecordModal').style.display = 'flex';
 
@@ -927,13 +899,9 @@
 
                     subject: subject,
 
-                    pass_no: document.getElementById('editPassNo').value.trim(),
-
                     in_payment: cleanAmountValue(document.getElementById('editInPayment').value),
 
-                    out_payment: cleanAmountValue(document.getElementById('editOutPayment').value),
-
-                    sub_agent: document.getElementById('editSubAgent').value.trim()
+                    out_payment: cleanAmountValue(document.getElementById('editOutPayment').value)
 
                 })
 

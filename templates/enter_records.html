@@ -176,10 +176,8 @@
                                             <th>Excel Row</th>
                                             <th>Date</th>
                                             <th>Subject</th>
-                                            <th>Pass No.</th>
                                             <th>In Payment</th>
                                             <th>Out Payment</th>
-                                            <th>Sub Agent</th>
                                         </tr>
                                     </thead>
                                     <tbody id="excelPreviewBody"></tbody>
@@ -306,13 +304,9 @@
                     </div>
                     
                     <div class="form-row">
-                        <div class="form-group">
+                        <div class="form-group full-width">
                             <label><i class="fas fa-calendar-alt"></i> Date <span class="required">*</span></label>
                             <input type="date" class="date-input" value="${today}" required>
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-passport"></i> Pass Number</label>
-                            <input type="text" class="pass-input" placeholder="Enter pass number">
                         </div>
                     </div>
                     
@@ -332,10 +326,6 @@
                             <label><i class="fas fa-arrow-up" style="color: #DC143C;"></i> Out Payment</label>
                             <input type="text" class="out-payment amount-input" placeholder="0" inputmode="decimal" value="0">
                         </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-user-tie"></i> Sub Agent</label>
-                            <input type="text" class="sub-agent" placeholder="Enter sub agent name">
-                        </div>
                     </div>
                 </div>
             `;
@@ -346,10 +336,8 @@
             if (record) {
                 card.querySelector('.date-input').value = record.date || today;
                 card.querySelector('.subject-input').value = record.subject || '';
-                card.querySelector('.pass-input').value = record.pass_no || '';
                 card.querySelector('.in-payment').value = formatAmountValue(record.in_payment || 0);
                 card.querySelector('.out-payment').value = formatAmountValue(record.out_payment || 0);
-                card.querySelector('.sub-agent').value = record.sub_agent || '';
             }
             updateEntrySummary();
         }
@@ -618,10 +606,8 @@
                         <td>${escapeHtml(row.source_row)}</td>
                         <td>${escapeHtml(row.date)}</td>
                         <td class="excel-subject-cell">${escapeHtml(row.subject)}</td>
-                        <td>${escapeHtml(row.pass_no)}</td>
                         <td class="amount-cell">${formatSummaryAmount(row.in_payment || 0)}</td>
                         <td class="amount-cell">${formatSummaryAmount(row.out_payment || 0)}</td>
-                        <td>${escapeHtml(row.sub_agent)}</td>
                     </tr>`;
             }).join('');
 
@@ -691,10 +677,8 @@
                 records.push({
                     date: date,
                     subject: subject,
-                    pass_no: card.querySelector('.pass-input').value.trim(),
                     in_payment: cleanAmountValue(card.querySelector('.in-payment').value),
-                    out_payment: cleanAmountValue(card.querySelector('.out-payment').value),
-                    sub_agent: card.querySelector('.sub-agent').value.trim()
+                    out_payment: cleanAmountValue(card.querySelector('.out-payment').value)
                 });
             });
 
