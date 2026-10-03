@@ -152,6 +152,22 @@
 
                         <div class="excel-import-status" id="excelImportStatus" style="display:none;"></div>
 
+                        <div class="excel-import-target" id="excelImportTarget" style="display:none;">
+                            <div class="excel-target-info">
+                                <span>IMPORT TARGET</span>
+                                <strong id="excelTargetMonth">—</strong>
+                                <small id="excelTargetHint"></small>
+                            </div>
+                            <div class="excel-import-mode">
+                                <label for="excelImportMode">Save mode</label>
+                                <select id="excelImportMode" onchange="updateExcelImportModeHint()">
+                                    <option value="replace">Replace month records</option>
+                                    <option value="append">Add to existing records</option>
+                                </select>
+                                <small id="excelModeHint"></small>
+                            </div>
+                        </div>
+
                         <div class="excel-preview-section" id="excelPreviewSection" style="display:none;">
                             <div class="excel-preview-meta">
                                 <div>
@@ -210,6 +226,7 @@
         let saveInProgress = false;
         let excelImportPreview = null;
         let excelImportFile = null;
+        let excelImportContext = null;
 
         document.addEventListener('DOMContentLoaded', function() {
             loadNextReference();
@@ -385,6 +402,7 @@
         }
 
         function clearRows() {
+            excelImportContext = null;
             initializeForms();
             updateEntrySummary();
             showMessage('✓ Form cleared', 'success');
@@ -499,10 +517,13 @@
 
         function resetExcelImportPreview() {
             excelImportPreview = null;
+            excelImportContext = null;
             const section = document.getElementById('excelPreviewSection');
+            const target = document.getElementById('excelImportTarget');
             const tbody = document.getElementById('excelPreviewBody');
             const loadBtn = document.getElementById('excelLoadBtn');
             if (section) section.style.display = 'none';
+            if (target) target.style.display = 'none';
             if (tbody) tbody.innerHTML = '';
             if (loadBtn) loadBtn.disabled = true;
             const status = document.getElementById('excelImportStatus');
@@ -578,11 +599,51 @@
             }
         }
 
+        function updateExcelImportModeHint() {
+            const select = document.getElementById('excelImportMode');
+            const hint = document.getElementById('excelModeHint');
+            if (!select || !hint) return;
+            if (select.value === 'replace') {
+                hint.textContent = 'Rebuilds this month from the uploaded valid rows. Best for a full UTA month export.';
+            } else {
+                hint.textContent = 'Keeps existing rows and adds the uploaded rows after them.';
+            }
+        }
+
         function renderExcelImportPreview(data) {
             const section = document.getElementById('excelPreviewSection');
+            const targetBox = document.getElementById('excelImportTarget');
             const body = document.getElementById('excelPreviewBody');
             const loadBtn = document.getElementById('excelLoadBtn');
+            const modeSelect = document.getElementById('excelImportMode');
             if (!section || !body) return;
+
+            if (targetBox) targetBox.style.display = 'grid';
+            const targetMonth = document.getElementById('excelTargetMonth');
+            const targetHint = document.getElementById('excelTargetHint');
+            if (targetMonth) {
+                targetMonth.textContent = data.multiple_months
+                    ? 'Multiple months detected'
+                    : (data.detected_month_display || 'Month not detected');
+            }
+            if (targetHint) {
+                if (data.multiple_months) {
+                    targetHint.textContent = 'Upload one month at a time so records cannot be written to the wrong workbook.';
+                } else if (data.detected_month && data.detected_month !== data.active_month) {
+                    targetHint.textContent = `Active month is ${data.active_month_display}. This import will safely target ${data.detected_month_display}.`;
+                } else if (data.detected_month) {
+                    targetHint.textContent = `Detected from the transaction dates: ${data.detected_month_display}.`;
+                } else {
+                    targetHint.textContent = 'A target month could not be detected.';
+                }
+            }
+            if (modeSelect) {
+                modeSelect.value = data.recommended_mode || 'append';
+                if (!data.full_month_export) {
+                    modeSelect.value = 'append';
+                }
+            }
+            updateExcelImportModeHint();
 
             document.getElementById('excelStatRows').textContent = data.total_rows || 0;
             document.getElementById('excelStatValid').textContent = data.valid_count || 0;
@@ -612,16 +673,26 @@
             }).join('');
 
             section.style.display = 'block';
-            if (loadBtn) loadBtn.disabled = !(data.valid_count > 0);
+            if (loadBtn) loadBtn.disabled = !(data.valid_count > 0 && data.can_load);
 
-            if (data.invalid_count > 0) {
+            if (data.multiple_months) {
+                setExcelImportStatus(
+                    `<i class="fas fa-circle-exclamation"></i> This file contains multiple months. Upload one month at a time.`,
+                    'error'
+                );
+            } else if (!data.target_exists && !data.can_create_target) {
+                setExcelImportStatus(
+                    `<i class="fas fa-circle-exclamation"></i> ${escapeHtml(data.detected_month_display || 'The detected month')} does not exist in the system and this file does not contain enough opening-balance information to create it safely.`,
+                    'error'
+                );
+            } else if (data.invalid_count > 0) {
                 setExcelImportStatus(
                     `<i class="fas fa-triangle-exclamation"></i> ${data.valid_count} valid row(s) ready. ${data.invalid_count} invalid row(s) will not be loaded.`,
                     'warning'
                 );
             } else if (data.valid_count > 0) {
                 setExcelImportStatus(
-                    `<i class="fas fa-circle-check"></i> ${data.valid_count} valid row(s) are ready to load into Enter Records.`,
+                    `<i class="fas fa-circle-check"></i> ${data.valid_count} valid row(s) are ready for ${escapeHtml(data.detected_month_display || 'the detected month')}.`,
                     'success'
                 );
             } else {
@@ -631,6 +702,10 @@
 
         function loadExcelRowsIntoForm() {
             if (!excelImportPreview) return;
+            if (!excelImportPreview.can_load) {
+                setExcelImportStatus('This workbook cannot be loaded safely. Check the target-month message above.', 'error');
+                return;
+            }
             const validRows = (excelImportPreview.rows || []).filter(row => row.valid);
             if (!validRows.length) {
                 setExcelImportStatus('There are no valid rows to load.', 'error');
@@ -646,9 +721,17 @@
             });
             updateCardNumbers();
             updateEntrySummary();
+            const modeSelect = document.getElementById('excelImportMode');
+            excelImportContext = {
+                target_month: excelImportPreview.detected_month,
+                target_month_display: excelImportPreview.detected_month_display,
+                import_mode: modeSelect ? modeSelect.value : (excelImportPreview.recommended_mode || 'append'),
+                opening_balance: excelImportPreview.opening_balance,
+                opening_date: excelImportPreview.opening_date
+            };
             closeExcelImportModal();
             showMessage(
-                `✅ Loaded ${validRows.length} Excel record(s). Total In: ${formatSummaryAmount(excelImportPreview.total_in)} · Total Out: ${formatSummaryAmount(excelImportPreview.total_out)}. Review them, then click Save to Excel File.`,
+                `✅ Loaded ${validRows.length} Excel record(s) for ${escapeHtml(excelImportContext.target_month_display)}. Mode: ${excelImportContext.import_mode === 'replace' ? 'Replace month records' : 'Add to existing records'}. Total In: ${formatSummaryAmount(excelImportPreview.total_in)} · Total Out: ${formatSummaryAmount(excelImportPreview.total_out)}. Review them, then click Save to Excel File.`,
                 'success'
             );
             const firstCard = document.querySelector('.form-card');
@@ -704,7 +787,14 @@
                 method: 'POST',
                 cache: 'no-store',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ records: records })
+                body: JSON.stringify({
+                    records: records,
+                    source: excelImportContext ? 'excel_import' : 'manual',
+                    target_month: excelImportContext ? excelImportContext.target_month : null,
+                    import_mode: excelImportContext ? excelImportContext.import_mode : 'append',
+                    import_opening_balance: excelImportContext ? excelImportContext.opening_balance : null,
+                    import_opening_date: excelImportContext ? excelImportContext.opening_date : null
+                })
             })
             .then(async response => {
                 const data = await response.json();
@@ -719,6 +809,7 @@
                         `<i class="fas fa-tag"></i> Next: ${data.next_reference}`;
                 }
                 showMessage(`✅ ${data.message} Total records: ${data.total_records}`, 'success');
+                excelImportContext = null;
                 initializeForms();
                 setTimeout(loadNextReference, 250);
             })

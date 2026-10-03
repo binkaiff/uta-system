@@ -361,7 +361,7 @@
 
                             <tr>
 
-                                <td colspan="10" class="loading-cell">
+                                <td colspan="8" class="loading-cell">
 
                                     <i class="fas fa-spinner fa-pulse"></i> Loading records...
 
@@ -685,7 +685,7 @@
 
                     console.error('Error loading records:', error);
 
-                    document.getElementById('viewTableBody').innerHTML = '<tr><td colspan="10" class="error-cell"><i class="fas fa-exclamation-circle"></i> Error loading records</td></tr>';
+                    document.getElementById('viewTableBody').innerHTML = '<tr><td colspan="8" class="error-cell"><i class="fas fa-exclamation-circle"></i> Error loading records</td></tr>';
 
                 });
 
@@ -699,7 +699,7 @@
 
             if (records.length === 0) {
 
-                tbody.innerHTML = '<tr><td colspan="10" class="empty-cell"><i class="fas fa-inbox"></i> No records found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="empty-cell"><i class="fas fa-inbox"></i> No records found</td></tr>';
 
                 recordCountSpan.textContent = '0';
 
