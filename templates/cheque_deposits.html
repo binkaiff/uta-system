@@ -254,7 +254,7 @@
                                     class="delete-icon-btn"
                                     type="button"
                                     data-deposit-id="{{ dep.deposit_id }}"
-                                    onclick="deleteDeposit(this.dataset.depositId)"
+                                    onclick="openDeleteDepositModal(this.dataset.depositId)"
                                     title="Delete"
                                 ><i class="fas fa-trash-alt"></i></button>
 
@@ -329,6 +329,23 @@
 </div>
 
 
+
+<!-- Professional cheque delete confirmation -->
+<div id="deleteChequeModal" class="modal">
+    <div class="modal-content small-modal">
+        <div class="modal-icon"><i class="fas fa-trash-alt"></i></div>
+        <h3>Delete Cheque Deposit</h3>
+        <p id="deleteChequeMessage">Are you sure you want to delete this cheque deposit?</p>
+        <div class="modal-buttons">
+            <button type="button" class="btn-danger" onclick="confirmDeleteDeposit()">
+                <i class="fas fa-trash-alt"></i> Delete
+            </button>
+            <button type="button" class="btn-secondary" onclick="closeDeleteDepositModal()">
+                <i class="fas fa-times"></i> Cancel
+            </button>
+        </div>
+    </div>
+</div>
 
 <script>
 
@@ -835,16 +852,46 @@ async function addSavedDepositToExcel(depositId, button) {
 
 
 
-async function deleteDeposit(id) {
+let pendingChequeDeleteId = '';
 
-    if (!confirm('Delete cheque deposit ' + id + '?')) return;
+function openDeleteDepositModal(id) {
+    if (!id) return;
+    pendingChequeDeleteId = id;
+    const message = document.getElementById('deleteChequeMessage');
+    if (message) {
+        message.innerHTML = `Delete <strong>${id}</strong>? This removes the cheque deposit slip only. The Accounts transaction will remain.`;
+    }
+    const modal = document.getElementById('deleteChequeModal');
+    if (modal) modal.style.display = 'flex';
+}
 
-    const res = await fetch('/delete_cheque_deposit', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({deposit_id:id})});
+function closeDeleteDepositModal() {
+    pendingChequeDeleteId = '';
+    const modal = document.getElementById('deleteChequeModal');
+    if (modal) modal.style.display = 'none';
+}
 
-    const data = await res.json();
+async function confirmDeleteDeposit() {
+    const id = pendingChequeDeleteId;
+    if (!id) return;
 
-    if (data.success) window.location.reload(); else showChequeMessage(data.message || 'Delete failed', 'error');
-
+    try {
+        const res = await fetch('/delete_cheque_deposit', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({deposit_id:id})
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+            throw new Error(data.message || 'Delete failed');
+        }
+        closeDeleteDepositModal();
+        showChequeMessage(data.message || 'Cheque deposit deleted.', 'success');
+        setTimeout(() => window.location.reload(), 650);
+    } catch (error) {
+        closeDeleteDepositModal();
+        showChequeMessage(error.message || 'Delete failed', 'error');
+    }
 }
 
 
@@ -906,6 +953,24 @@ function showChequeMessage(message, type) {
 }
 
 
+
+// When Edit is clicked from View Records, load that saved deposit automatically.
+const requestedEditId = new URLSearchParams(window.location.search).get('edit');
+if (requestedEditId) {
+    const requestedDeposit = existingDeposits.find(dep => dep.deposit_id === requestedEditId);
+    if (requestedDeposit) {
+        setTimeout(() => editDeposit(requestedDeposit), 120);
+    }
+}
+
+window.addEventListener('click', (event) => {
+    const modal = document.getElementById('deleteChequeModal');
+    if (event.target === modal) closeDeleteDepositModal();
+});
+
+window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeDeleteDepositModal();
+});
 
 updateDate();
 

@@ -399,7 +399,7 @@
 
                         <thead>
 
-                            <tr><th>No</th><th>Date</th><th>Time</th><th>Deposit ID</th><th>Amount</th><th>Notes</th><th>PDF</th></tr>
+                            <tr><th>Action</th><th>No</th><th>Date</th><th>Time</th><th>Deposit ID</th><th>Amount</th><th>Notes</th><th>PDF</th></tr>
 
                         </thead>
 
@@ -408,6 +408,21 @@
                         {% for dep in cheque_deposits %}
 
                             <tr>
+
+                                <td class="action-cell">
+                                    <a
+                                        class="edit-icon-btn"
+                                        href="{{ url_for('cheque_deposits_page', edit=dep.deposit_id) }}"
+                                        title="Edit Cheque Deposit"
+                                    ><i class="fas fa-edit"></i></a>
+                                    <button
+                                        type="button"
+                                        class="delete-icon-btn"
+                                        data-deposit-id="{{ dep.deposit_id }}"
+                                        onclick="showDeleteChequeDepositModal(this.dataset.depositId)"
+                                        title="Delete Cheque Deposit"
+                                    ><i class="fas fa-trash-alt"></i></button>
+                                </td>
 
                                 <td>{{ loop.index }}</td>
 
@@ -554,6 +569,23 @@
     </div>
 
 
+
+    <!-- Cheque Deposit Delete Confirmation Modal -->
+    <div id="deleteChequeDepositModal" class="modal">
+        <div class="modal-content small-modal">
+            <div class="modal-icon"><i class="fas fa-trash-alt"></i></div>
+            <h3>Delete Cheque Deposit</h3>
+            <p id="deleteChequeDepositMessage">Are you sure you want to delete this cheque deposit?</p>
+            <div class="modal-buttons">
+                <button type="button" onclick="confirmDeleteChequeDeposit()" class="btn-danger">
+                    <i class="fas fa-trash-alt"></i> Delete
+                </button>
+                <button type="button" onclick="closeDeleteChequeDepositModal()" class="btn-secondary">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+            </div>
+        </div>
+    </div>
 
     <div id="message" class="message"></div>
 
@@ -1132,6 +1164,48 @@
             setRecordView(savedView);
         }
 
+        let pendingChequeDepositDelete = '';
+
+        function showDeleteChequeDepositModal(depositId) {
+            if (!depositId) return;
+            pendingChequeDepositDelete = depositId;
+            const message = document.getElementById('deleteChequeDepositMessage');
+            if (message) {
+                message.innerHTML = `Delete <strong>${depositId}</strong>? This removes the cheque deposit slip only. The Accounts transaction will remain.`;
+            }
+            const modal = document.getElementById('deleteChequeDepositModal');
+            if (modal) modal.style.display = 'flex';
+        }
+
+        function closeDeleteChequeDepositModal() {
+            pendingChequeDepositDelete = '';
+            const modal = document.getElementById('deleteChequeDepositModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        async function confirmDeleteChequeDeposit() {
+            const depositId = pendingChequeDepositDelete;
+            if (!depositId) return;
+
+            try {
+                const response = await fetch('/delete_cheque_deposit', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({deposit_id: depositId})
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Unable to delete cheque deposit.');
+                }
+                closeDeleteChequeDepositModal();
+                showMessage(data.message || 'Cheque deposit deleted successfully.', 'success');
+                setTimeout(() => window.location.reload(), 650);
+            } catch (error) {
+                closeDeleteChequeDepositModal();
+                showMessage(error.message || 'Unable to delete cheque deposit.', 'error');
+            }
+        }
+
         function downloadMonth() {
 
             window.location.href = `/download_excel/${monthName}`;
@@ -1194,6 +1268,8 @@
 
             const editModal = document.getElementById('editRecordModal');
 
+            const chequeDeleteModal = document.getElementById('deleteChequeDepositModal');
+
             if (event.target == modal) {
 
                 closeDeleteRecordModal();
@@ -1206,8 +1282,20 @@
 
             }
 
+            if (event.target == chequeDeleteModal) {
+
+                closeDeleteChequeDepositModal();
+
+            }
+
         }
 
+
+        window.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeDeleteChequeDepositModal();
+            }
+        });
 
         window.addEventListener('DOMContentLoaded', function() {
             restoreRecordView();
