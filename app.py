@@ -119,7 +119,15 @@ def get_month_cheque_deposits(month_name):
 
     deposits = load_cheque_deposits()
 
-    rows = [item for item in deposits.values() if item.get('month') == month_name]
+    # Hidden auto-generated deposits are kept as small tombstones so a deleted
+    # cheque does not immediately reappear the next time Accounts records sync.
+    # They are internal state only and must never be shown in the UI/PDF list.
+    rows = [
+        item for item in deposits.values()
+        if item.get('month') == month_name
+        and not item.get('auto_hidden')
+        and item.get('deposit_id')
+    ]
 
     rows.sort(key=lambda x: (str(x.get('date', '')), str(x.get('time', '')), str(x.get('created_at', ''))))
 
@@ -204,7 +212,7 @@ def _cheque_subject_matches(subject, in_payment=0, out_payment=0):
 
 
 def _auto_cheque_deposit_id(month_name, ref_no):
-    """Create a deterministic ID so repeated imports never create duplicate auto slips."""
+    """Create a deterministic display ID from the current UTA reference."""
     try:
         month_code = datetime.strptime(month_name, '%B_%Y').strftime('%Y%m')
     except Exception:
@@ -213,17 +221,69 @@ def _auto_cheque_deposit_id(month_name, ref_no):
     return f'AUTO-{month_code}-{ref_code}'
 
 
+def _auto_cheque_source_key(month_name, date_value, subject, in_payment, out_payment, occurrence=1):
+    """Stable-ish source identity independent of the mutable UTA reference number.
+
+    References are re-numbered when records are inserted/deleted.  Using the record
+    values plus a duplicate occurrence counter lets an edited/deleted cheque-deposit
+    preference survive normal UTA re-indexing.
+    """
+    subject_norm = ' '.join(str(subject or '').strip().lower().split())
+    payload = '|'.join([
+        str(month_name or ''),
+        str(date_value or ''),
+        subject_norm,
+        f"{parse_amount(in_payment, 0):.2f}",
+        f"{parse_amount(out_payment, 0):.2f}",
+        str(int(occurrence or 1)),
+    ])
+    return hashlib.sha1(payload.encode('utf-8')).hexdigest()
+
+
+def _auto_cheque_hidden_key(source_key):
+    return f'__AUTO_HIDDEN__{source_key}'
+
+
+def reset_auto_cheque_state_for_month(month_name):
+    """Clear only auto-generated cheque state for one month.
+
+    This is used when a full-month Excel workbook is imported in Replace mode.
+    It removes old auto-generated cheque rows and hidden deletion tombstones so
+    the freshly imported canonical records can regenerate their cheque slips.
+    Manually created cheque deposits are preserved.
+    """
+    if not month_name:
+        return 0
+
+    deposits = load_cheque_deposits()
+    removed = 0
+    for dep_id in list(deposits.keys()):
+        entry = deposits.get(dep_id) or {}
+        if entry.get('month') == month_name and entry.get('auto_generated'):
+            del deposits[dep_id]
+            removed += 1
+
+    if removed:
+        save_cheque_deposits(deposits)
+    return removed
+
+
+AUTO_CHEQUE_EDITABLE_FIELDS = (
+    'date', 'time', 'transaction_id', 'location', 'account_number',
+    'account_name', 'nic_number', 'contact_number', 'reference_number',
+    'cheque_no', 'bank', 'branch', 'amount', 'notes', 'raw_text',
+    'image_filename'
+)
+
 
 def sync_auto_cheque_deposits_from_records(month_name):
-    """Rebuild auto cheque-deposit entries from cheque-labelled Accounts transactions.
+    """Rebuild auto cheque deposits while preserving user edits/deletions.
 
-    Rules:
-    - Plain 'Cheque', explicit 'Cheque Deposit', or incoming cheque variants are detected.
-    - Every matching transaction becomes one linked cheque-deposit entry.
-    - The amount is the non-zero In Payment amount, otherwise the Out Payment amount.
-    - Auto entries are deterministic and rebuilt on every save/edit/delete/import, so
-      changed UTA references, dates and amounts stay in sync and duplicates cannot grow.
-    - Manually created OCR cheque deposits are preserved.
+    Auto cheque deposits are derived from Accounts records, but users can still edit
+    or delete the generated cheque slip.  A deleted auto slip is represented by a
+    hidden tombstone keyed to the source transaction, preventing it from being
+    re-created on every page load.  User edits are overlaid onto the regenerated
+    source-linked entry, so they also survive UTA reference re-numbering.
     """
     if not month_name:
         return 0
@@ -240,15 +300,48 @@ def sync_auto_cheque_deposits_from_records(month_name):
 
         deposits = load_cheque_deposits()
 
-        # Remove only entries previously generated from Accounts records for this month.
-        # Manual/OCR deposits remain untouched.
+        old_auto_by_source = {}
+        hidden_by_source = {}
+
+        # Capture current auto state before rebuilding it.  Older generated rows may
+        # not yet have source_key/source_occurrence, so derive a compatible key.
+        for dep_id, entry in list(deposits.items()):
+            if entry.get('month') != month_name or not entry.get('auto_generated'):
+                continue
+
+            source_key = entry.get('source_key')
+            if not source_key:
+                source_key = _auto_cheque_source_key(
+                    month_name,
+                    entry.get('source_date') or entry.get('date'),
+                    entry.get('source_subject'),
+                    entry.get('source_in_payment', 0),
+                    entry.get('source_out_payment', 0),
+                    entry.get('source_occurrence', 1),
+                )
+                entry['source_key'] = source_key
+
+            if entry.get('auto_hidden'):
+                hidden_by_source[source_key] = entry
+            else:
+                old_auto_by_source[source_key] = entry
+
+        # Remove generated rows for this month, then put hidden tombstones back.
         for dep_id in list(deposits.keys()):
             entry = deposits.get(dep_id) or {}
             if entry.get('month') == month_name and entry.get('auto_generated'):
                 del deposits[dep_id]
 
+        for source_key, hidden in hidden_by_source.items():
+            hidden_copy = dict(hidden)
+            hidden_copy['auto_generated'] = True
+            hidden_copy['auto_hidden'] = True
+            hidden_copy['source_key'] = source_key
+            deposits[_auto_cheque_hidden_key(source_key)] = hidden_copy
+
         now_text = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         generated = 0
+        occurrence_counts = {}
 
         for item in items:
             row = item.get('row') or []
@@ -264,10 +357,22 @@ def sync_auto_cheque_deposits_from_records(month_name):
             if not ref_no or not date_value or not _cheque_subject_matches(subject, in_payment, out_payment):
                 continue
 
+            subject_norm = ' '.join(subject.lower().split())
+            base = (date_value, subject_norm, float(in_payment), float(out_payment))
+            occurrence_counts[base] = occurrence_counts.get(base, 0) + 1
+            occurrence = occurrence_counts[base]
+            source_key = _auto_cheque_source_key(
+                month_name, date_value, subject, in_payment, out_payment, occurrence
+            )
+
+            # Respect an explicit user deletion even if the UTA reference changed.
+            if source_key in hidden_by_source:
+                continue
+
             # A manual deposit explicitly linked to this UTA reference takes priority.
             manually_linked = False
             for manual in deposits.values():
-                if manual.get('month') != month_name or manual.get('auto_generated'):
+                if manual.get('month') != month_name or manual.get('auto_generated') or manual.get('auto_hidden'):
                     continue
                 manual_ref = str(
                     manual.get('source_ref')
@@ -284,8 +389,9 @@ def sync_auto_cheque_deposits_from_records(month_name):
             amount = in_payment if in_payment != 0 else out_payment
             direction = 'In Payment' if in_payment != 0 else 'Out Payment'
             dep_id = _auto_cheque_deposit_id(month_name, ref_no)
+            old_entry = old_auto_by_source.get(source_key) or {}
 
-            deposits[dep_id] = {
+            entry = {
                 'deposit_id': dep_id,
                 'month': month_name,
                 'date': date_value,
@@ -306,21 +412,32 @@ def sync_auto_cheque_deposits_from_records(month_name):
                 'image_filename': '',
                 'excel_added': True,
                 'auto_generated': True,
+                'auto_hidden': False,
+                'user_modified': False,
+                'source_key': source_key,
+                'source_occurrence': occurrence,
                 'source_ref': ref_no,
+                'source_date': date_value,
                 'source_subject': subject,
                 'source_in_payment': in_payment,
                 'source_out_payment': out_payment,
-                'created_by': 'System',
-                'created_at': now_text,
+                'created_by': old_entry.get('created_by') or 'System',
+                'created_at': old_entry.get('created_at') or now_text,
                 'updated_at': now_text,
             }
+
+            # Preserve fields the user explicitly edited on an auto-generated slip.
+            if old_entry.get('user_modified'):
+                for field in AUTO_CHEQUE_EDITABLE_FIELDS:
+                    if field in old_entry:
+                        entry[field] = old_entry.get(field)
+                entry['user_modified'] = True
+
+            deposits[dep_id] = entry
             generated += 1
 
         save_cheque_deposits(deposits)
         return generated
-
-
-
 
 
 def sync_cheque_deposits_to_excel(month_name, include_all=False):
@@ -2673,6 +2790,14 @@ def save_records():
 
             _atomic_save_workbook(wb, filename)
             wb.close()
+
+            # A full-month Replace import is a fresh canonical restore. Clear only
+            # previous AUTO cheque state (including hidden deletion tombstones) so
+            # cheque rows from the newly uploaded workbook can regenerate normally.
+            # Manual cheque deposits are intentionally preserved.
+            if source == 'excel_import' and import_mode == 'replace':
+                reset_auto_cheque_state_for_month(target_month)
+
             sync_cheque_deposits_to_excel(target_month)
 
         mode_word = 'replaced' if (source == 'excel_import' and import_mode == 'replace') else 'saved'
@@ -2921,7 +3046,19 @@ def save_cheque_deposit():
 
             'auto_generated': bool(existing.get('auto_generated', False)),
 
+            'auto_hidden': False,
+
+            # Saving an auto-generated deposit from the edit form means the user
+            # intentionally customized it; preserve those fields on future syncs.
+            'user_modified': bool(existing.get('auto_generated', False)) or bool(existing.get('user_modified', False)),
+
+            'source_key': existing.get('source_key', ''),
+
+            'source_occurrence': existing.get('source_occurrence', 1),
+
             'source_ref': existing.get('source_ref', ''),
+
+            'source_date': existing.get('source_date', ''),
 
             'source_subject': existing.get('source_subject', ''),
 
@@ -3014,61 +3151,72 @@ def add_cheque_deposit_to_excel():
 
 
 @app.route('/delete_cheque_deposit', methods=['POST'])
-
 @login_required
-
 def delete_cheque_deposit():
-
     try:
-
         data = request.get_json(silent=True) or {}
-
         deposit_id = str(data.get('deposit_id', '')).strip()
-
         deposits = load_cheque_deposits()
 
         if deposit_id not in deposits:
-
             return jsonify({'success': False, 'message': 'Cheque deposit not found.'}), 404
 
-
-
         entry = deposits[deposit_id]
-
         month_name = entry.get('month')
-
         image_filename = entry.get('image_filename')
 
         if image_filename:
-
             image_path = os.path.join(CHEQUE_UPLOAD_DIR, image_filename)
-
             if os.path.exists(image_path):
-
                 try:
-
                     os.remove(image_path)
-
                 except OSError:
-
                     pass
 
-        del deposits[deposit_id]
+        if entry.get('auto_generated'):
+            # Auto rows are normally rebuilt from Accounts records.  Keep a hidden
+            # tombstone so an explicit user deletion remains deleted after sync.
+            source_key = entry.get('source_key') or _auto_cheque_source_key(
+                month_name,
+                entry.get('source_date') or entry.get('date'),
+                entry.get('source_subject'),
+                entry.get('source_in_payment', 0),
+                entry.get('source_out_payment', 0),
+                entry.get('source_occurrence', 1),
+            )
+            hidden = {
+                'deposit_id': deposit_id,
+                'month': month_name,
+                'auto_generated': True,
+                'auto_hidden': True,
+                'source_key': source_key,
+                'source_occurrence': entry.get('source_occurrence', 1),
+                'source_ref': entry.get('source_ref', ''),
+                'source_date': entry.get('source_date') or entry.get('date', ''),
+                'source_subject': entry.get('source_subject', ''),
+                'source_in_payment': entry.get('source_in_payment', 0),
+                'source_out_payment': entry.get('source_out_payment', 0),
+                'deleted_by': get_accounts_user(),
+                'deleted_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            }
+            del deposits[deposit_id]
+            deposits[_auto_cheque_hidden_key(source_key)] = hidden
+        else:
+            del deposits[deposit_id]
 
         save_cheque_deposits(deposits)
 
         if month_name:
-
             sync_cheque_deposits_to_excel(month_name)
 
-        return jsonify({'success': True, 'message': 'Cheque deposit deleted.'})
+        return jsonify({
+            'success': True,
+            'message': 'Cheque deposit deleted successfully.',
+            'auto_generated': bool(entry.get('auto_generated')),
+        })
 
     except Exception as e:
-
         return jsonify({'success': False, 'message': f'Error deleting cheque deposit: {str(e)}'}), 500
-
-
-
 
 
 @app.route('/cheque_deposit_image/<deposit_id>')
