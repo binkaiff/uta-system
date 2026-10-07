@@ -126,6 +126,7 @@ def get_month_cheque_deposits(month_name):
         item for item in deposits.values()
         if item.get('month') == month_name
         and not item.get('auto_hidden')
+        and not item.get('manual_hidden')
         and item.get('deposit_id')
     ]
 
@@ -186,12 +187,23 @@ def find_cheque_section_row(ws):
 
 
 def remove_cheque_section(ws):
+    """Remove the cheque-history block and any merged cells it created.
 
+    OpenPyXL does not reliably move/remove merged ranges when rows are deleted. A
+    stale merged A:F range can later land on a normal transaction row and silently
+    erase Ref/Date/Subject/Payment cells when the workbook is saved. That was the
+    root cause of records disappearing and UTA references jumping backwards.
+    """
     marker_row = find_cheque_section_row(ws)
-
     if marker_row:
-
+        for merged in list(ws.merged_cells.ranges):
+            if merged.min_row >= marker_row or merged.max_row >= marker_row:
+                ws.unmerge_cells(str(merged))
         ws.delete_rows(marker_row, ws.max_row - marker_row + 1)
+        try:
+            ws._current_row = _last_meaningful_record_row(ws)
+        except Exception:
+            pass
 
 
 
@@ -244,6 +256,424 @@ def _auto_cheque_hidden_key(source_key):
     return f'__AUTO_HIDDEN__{source_key}'
 
 
+def _normalise_cheque_amount(value):
+    return round(parse_amount(value, 0), 2)
+
+
+def _deposit_ref_values(entry):
+    """Return all UTA reference-like values stored on a cheque deposit."""
+    values = set()
+    for key in ('linked_ref', 'source_ref', 'reference_number', 'transaction_id'):
+        value = str((entry or {}).get(key) or '').strip().upper()
+        if value.startswith('UTA-'):
+            values.add(value)
+    return values
+
+
+def _linked_cheque_deposit_ids(month_name, ref_no):
+    """Find cheque-deposit rows that represent the given Accounts transaction."""
+    target = str(ref_no or '').strip().upper()
+    if not month_name or not target:
+        return []
+
+    deposits = load_cheque_deposits()
+    matches = []
+    for dep_id, entry in deposits.items():
+        if entry.get('month') != month_name:
+            continue
+        if entry.get('auto_hidden') or entry.get('manual_hidden'):
+            continue
+        if target in _deposit_ref_values(entry):
+            matches.append(dep_id)
+    return matches
+
+
+def _delete_cheque_deposit_entries(deposit_ids):
+    """Delete cheque deposit JSON rows and their uploaded images without touching Accounts rows."""
+    ids = {str(x or '').strip() for x in (deposit_ids or []) if str(x or '').strip()}
+    if not ids:
+        return 0
+
+    deposits = load_cheque_deposits()
+    removed = 0
+    for dep_id in list(ids):
+        entry = deposits.get(dep_id)
+        if not entry:
+            continue
+        image_filename = str(entry.get('image_filename') or '').strip()
+        if image_filename:
+            image_path = os.path.join(CHEQUE_UPLOAD_DIR, image_filename)
+            if os.path.exists(image_path):
+                try:
+                    os.remove(image_path)
+                except OSError:
+                    pass
+        del deposits[dep_id]
+        removed += 1
+
+    if removed:
+        save_cheque_deposits(deposits)
+    return removed
+
+
+def _sync_manual_cheque_deposits_from_transaction(
+    deposit_ids,
+    month_name,
+    new_ref,
+    date_value,
+    subject,
+    in_payment,
+    out_payment,
+):
+    """Keep manual cheque slips identical to their linked Accounts transaction.
+
+    Auto-generated slips are rebuilt by sync_auto_cheque_deposits_from_records().
+    Manual slips remain user-entered documents, but their transaction-bound date,
+    amount and UTA link must follow the Accounts row so the two views cannot drift.
+    """
+    ids = {str(x or '').strip() for x in (deposit_ids or []) if str(x or '').strip()}
+    if not ids:
+        return {'updated': 0, 'deleted': 0}
+
+    in_amount = _normalise_cheque_amount(in_payment)
+    out_amount = _normalise_cheque_amount(out_payment)
+    is_cheque = _cheque_subject_matches(subject, in_amount, out_amount)
+    amount = in_amount if in_amount != 0 else out_amount
+
+    deposits = load_cheque_deposits()
+    updated = 0
+    delete_ids = []
+    now_text = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    for dep_id in ids:
+        entry = deposits.get(dep_id)
+        if not entry:
+            continue
+        if entry.get('auto_generated'):
+            # Source-bound fields for AUTO rows are handled by the auto sync below.
+            continue
+        if not is_cheque or amount <= 0:
+            delete_ids.append(dep_id)
+            continue
+
+        entry['date'] = _normalise_record_date(date_value)
+        entry['amount'] = amount
+        entry['linked_ref'] = str(new_ref or '').strip()
+        entry['linked_month'] = month_name
+        entry['excel_added'] = True
+        entry['updated_at'] = now_text
+        deposits[dep_id] = entry
+        updated += 1
+
+    if updated:
+        save_cheque_deposits(deposits)
+    deleted = _delete_cheque_deposit_entries(delete_ids)
+    return {'updated': updated, 'deleted': deleted}
+
+
+def _cheque_transaction_matches(row, entry):
+    """Return True when a canonical Accounts row is the transaction for a cheque deposit."""
+    if not row or len(row) < 7:
+        return False
+    date_value = _normalise_record_date(row[2])
+    subject = str(row[3] or '').strip()
+    in_payment = _normalise_cheque_amount(row[4])
+    out_payment = _normalise_cheque_amount(row[5])
+    entry_date = _normalise_record_date(entry.get('date'))
+    entry_amount = _normalise_cheque_amount(entry.get('amount'))
+    return (
+        bool(entry_date)
+        and date_value == entry_date
+        and _cheque_subject_matches(subject, in_payment, out_payment)
+        and in_payment == entry_amount
+        and out_payment == 0
+    )
+
+
+def _find_transaction_row_by_ref(ws, ref_no):
+    ref_no = str(ref_no or '').strip().upper()
+    if not ref_no:
+        return None
+    for row_no in range(3, ws.max_row + 1):
+        if str(ws.cell(row_no, 2).value or '').strip().upper() == ref_no:
+            return row_no
+    return None
+
+
+def _find_matching_cheque_transaction_row(ws, entry, excluded_refs=None, trust_linked_ref=False):
+    """Find an existing cheque transaction without accidentally linking a second deposit to it."""
+    excluded_refs = {str(x or '').strip().upper() for x in (excluded_refs or set()) if str(x or '').strip()}
+
+    linked_ref = str(entry.get('linked_ref') or '').strip().upper()
+    if linked_ref:
+        row_no = _find_transaction_row_by_ref(ws, linked_ref)
+        if row_no:
+            row = [ws.cell(row_no, col).value for col in range(1, 8)]
+            if trust_linked_ref and _cheque_subject_matches(row[3], row[4], row[5]):
+                return row_no
+            if _cheque_transaction_matches(row, entry):
+                return row_no
+
+    matches = []
+    for row_no in range(3, ws.max_row + 1):
+        row = [ws.cell(row_no, col).value for col in range(1, 8)]
+        ref_no = str(row[1] or '').strip().upper()
+        if ref_no in excluded_refs:
+            continue
+        if _cheque_transaction_matches(row, entry):
+            matches.append(row_no)
+
+    # Deterministic: if several identical imported cheque rows exist, link the first
+    # currently-unclaimed one rather than creating an unnecessary duplicate.
+    return matches[0] if matches else None
+
+
+def refresh_manual_cheque_links(month_name):
+    """Refresh manual deposit -> Accounts links and keep source-bound values aligned.
+
+    UTA references can be rebuilt whenever records are inserted, edited or deleted.
+    We first re-identify a deposit by exact date+amount when needed, then use the
+    current linked reference as a conservative fallback for an amount edit on the
+    same cheque/date. Once a confident row is found, the cheque slip's date/amount
+    are synchronized from Accounts so both sections show the same transaction.
+    """
+    if not month_name:
+        return 0
+    filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
+    if not os.path.exists(filename):
+        return 0
+
+    with RECORD_IO_LOCK:
+        wb = load_workbook(filename, data_only=True)
+        ws = wb['Records'] if 'Records' in wb.sheetnames else wb.active
+        deposits = load_cheque_deposits()
+        changed = False
+        claimed_refs = set()
+
+        manual_items = [
+            (dep_id, dep) for dep_id, dep in deposits.items()
+            if dep.get('month') == month_name
+            and dep.get('deposit_id')
+            and not dep.get('auto_generated')
+            and not dep.get('auto_hidden')
+            and not dep.get('manual_hidden')
+            and dep.get('excel_added')
+        ]
+        manual_items.sort(key=lambda item: (str(item[1].get('created_at', '')), str(item[0])))
+
+        for dep_id, entry in manual_items:
+            current_ref = str(entry.get('linked_ref') or '').strip().upper()
+            row_no = None
+            linked_ref_candidate = None
+
+            # First prefer a current reference only when it still matches exactly.
+            if current_ref and current_ref not in claimed_refs:
+                candidate = _find_transaction_row_by_ref(ws, current_ref)
+                if candidate:
+                    linked_ref_candidate = candidate
+                    row = [ws.cell(candidate, col).value for col in range(1, 8)]
+                    if _cheque_transaction_matches(row, entry):
+                        row_no = candidate
+
+            # If UTA numbers moved, exact date+amount is the safest re-identification.
+            if row_no is None:
+                row_no = _find_matching_cheque_transaction_row(ws, entry, excluded_refs=claimed_refs)
+
+            # If the amount itself was edited in Accounts, exact amount matching cannot
+            # succeed. In that case trust the already-linked reference only when it is
+            # still a cheque row on the same date. This fixes amount edits without
+            # mis-linking a reference that moved to an unrelated record.
+            if row_no is None and linked_ref_candidate is not None:
+                row = [ws.cell(linked_ref_candidate, col).value for col in range(1, 8)]
+                row_date = _normalise_record_date(row[2])
+                entry_date = _normalise_record_date(entry.get('date'))
+                if (
+                    row_date
+                    and row_date == entry_date
+                    and _cheque_subject_matches(row[3], row[4], row[5])
+                    and str(row[1] or '').strip().upper() not in claimed_refs
+                ):
+                    row_no = linked_ref_candidate
+
+            if not row_no:
+                continue
+
+            row = [ws.cell(row_no, col).value for col in range(1, 8)]
+            new_ref = str(row[1] or '').strip()
+            row_date = _normalise_record_date(row[2])
+            in_payment = _normalise_cheque_amount(row[4])
+            out_payment = _normalise_cheque_amount(row[5])
+            amount = in_payment if in_payment != 0 else out_payment
+            claimed_refs.add(new_ref.upper())
+            entry_changed = False
+
+            if new_ref and new_ref != entry.get('linked_ref'):
+                entry['linked_ref'] = new_ref
+                entry_changed = True
+            if entry.get('linked_month') != month_name:
+                entry['linked_month'] = month_name
+                entry_changed = True
+            if row_date and _normalise_record_date(entry.get('date')) != row_date:
+                entry['date'] = row_date
+                entry_changed = True
+            if amount > 0 and _normalise_cheque_amount(entry.get('amount')) != amount:
+                entry['amount'] = amount
+                entry_changed = True
+
+            if entry_changed:
+                entry['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                changed = True
+            deposits[dep_id] = entry
+
+        wb.close()
+        if changed:
+            save_cheque_deposits(deposits)
+        return sum(1 for _id, dep in manual_items if dep.get('linked_ref'))
+
+
+def upsert_manual_cheque_transaction(entry):
+    """Create/update exactly one normal Accounts transaction for a manual cheque deposit.
+
+    The visible Accounts row remains the normal 7-column format. A temporary unique
+    subject marker is used only in memory while re-sorting so the newly linked row can
+    be found reliably even when UTA references are re-numbered.
+    """
+    if not entry or entry.get('auto_generated'):
+        return {
+            'linked_ref': str(entry.get('source_ref') or entry.get('linked_ref') or ''),
+            'created': False,
+            'total_records': None,
+        }
+
+    month_name = str(entry.get('month') or '').strip()
+    if not month_name:
+        raise ValueError('Cheque deposit month is missing.')
+    filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
+    if not os.path.exists(filename):
+        raise ValueError('Month Excel file was not found.')
+
+    date_value = _normalise_record_date(entry.get('date'))
+    amount = _normalise_cheque_amount(entry.get('amount'))
+    if not date_value:
+        raise ValueError('Cheque deposit date is required.')
+    if amount <= 0:
+        raise ValueError('Cheque deposit amount must be greater than zero.')
+
+    deposit_id = str(entry.get('deposit_id') or '').strip()
+    if not deposit_id:
+        raise ValueError('Cheque deposit ID is missing.')
+
+    with RECORD_IO_LOCK:
+        wb = load_workbook(filename)
+        ws = wb['Records'] if 'Records' in wb.sheetnames else wb.active
+        remove_cheque_section(ws)
+        before_count = recalculate_and_sort_sheet(ws)
+
+        deposits = load_cheque_deposits()
+        excluded_refs = set()
+        for other_id, other in deposits.items():
+            if other_id == deposit_id:
+                continue
+            if (
+                other.get('month') == month_name
+                and not other.get('auto_generated')
+                and not other.get('auto_hidden')
+                and other.get('excel_added')
+                and other.get('linked_ref')
+            ):
+                excluded_refs.add(str(other.get('linked_ref')).strip().upper())
+
+        row_no = _find_matching_cheque_transaction_row(ws, entry, excluded_refs=excluded_refs, trust_linked_ref=True)
+        created = row_no is None
+        marker = f"__UTA_CHEQUE_LINK__{hashlib.sha1(deposit_id.encode('utf-8')).hexdigest()[:16]}"
+
+        if row_no is None:
+            _append_transaction_row(ws, [0, 'PENDING', date_value, marker, amount, 0, 0])
+        else:
+            ws.cell(row_no, 3).value = date_value
+            ws.cell(row_no, 4).value = marker
+            ws.cell(row_no, 5).value = amount
+            ws.cell(row_no, 6).value = 0
+
+        after_marker_count = recalculate_and_sort_sheet(ws)
+        marker_row = None
+        for scan_row in range(3, ws.max_row + 1):
+            if str(ws.cell(scan_row, 4).value or '') == marker:
+                marker_row = scan_row
+                break
+        if marker_row is None:
+            wb.close()
+            raise RuntimeError('Could not link the cheque deposit to its Accounts transaction.')
+
+        linked_ref = str(ws.cell(marker_row, 2).value or '').strip()
+        ws.cell(marker_row, 4).value = 'Cheque'
+        final_count = recalculate_and_sort_sheet(ws)
+
+        expected_count = before_count + (1 if created else 0)
+        if final_count != expected_count or final_count != after_marker_count:
+            wb.close()
+            raise RuntimeError('Cheque transaction integrity check failed. Nothing was saved.')
+
+        # The second rebuild keeps the row in the same date/order position.
+        final_row = _find_transaction_row_by_ref(ws, linked_ref)
+        if final_row is None:
+            # Defensive fallback: locate the exact cheque record and read its rebuilt ref.
+            temp_entry = dict(entry)
+            temp_entry['date'] = date_value
+            temp_entry['amount'] = amount
+            final_row = _find_matching_cheque_transaction_row(ws, temp_entry)
+        if final_row is None:
+            wb.close()
+            raise RuntimeError('Cheque transaction reference could not be verified.')
+        linked_ref = str(ws.cell(final_row, 2).value or '').strip()
+
+        _atomic_save_workbook(wb, filename)
+        wb.close()
+
+    return {
+        'linked_ref': linked_ref,
+        'created': created,
+        'total_records': final_count,
+        'next_reference': f'UTA-{final_count + 1:02d}',
+    }
+
+
+def delete_linked_manual_cheque_transaction(entry):
+    """Delete the Accounts row only when that row was originally created by this deposit."""
+    if not entry or entry.get('auto_generated') or not entry.get('linked_transaction_created'):
+        return False
+    month_name = str(entry.get('month') or '').strip()
+    filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
+    if not month_name or not os.path.exists(filename):
+        return False
+
+    with RECORD_IO_LOCK:
+        wb = load_workbook(filename)
+        ws = wb['Records'] if 'Records' in wb.sheetnames else wb.active
+        remove_cheque_section(ws)
+        before_count = recalculate_and_sort_sheet(ws)
+        row_no = _find_matching_cheque_transaction_row(ws, entry, trust_linked_ref=True)
+        if row_no is None:
+            wb.close()
+            return False
+        ws.delete_rows(row_no)
+        after_count = recalculate_and_sort_sheet(ws)
+        if after_count != before_count - 1:
+            wb.close()
+            raise RuntimeError('Linked cheque transaction delete integrity check failed.')
+        _atomic_save_workbook(wb, filename)
+        wb.close()
+    return True
+
+
+def _last_meaningful_record_row(ws):
+    """Return the last row containing visible Records data, ignoring styled blank rows."""
+    for row_no in range(ws.max_row, 0, -1):
+        if any(ws.cell(row_no, col).value not in (None, '') for col in range(1, 8)):
+            return row_no
+    return 1
+
+
 def reset_auto_cheque_state_for_month(month_name):
     """Clear only auto-generated cheque state for one month.
 
@@ -268,12 +698,30 @@ def reset_auto_cheque_state_for_month(month_name):
     return removed
 
 
-AUTO_CHEQUE_EDITABLE_FIELDS = (
-    'date', 'time', 'transaction_id', 'location', 'account_number',
-    'account_name', 'nic_number', 'contact_number', 'reference_number',
-    'cheque_no', 'bank', 'branch', 'amount', 'notes', 'raw_text',
+# Auto cheque slips are a second view of the same Accounts transaction.
+# Source-bound fields (date/reference/amount) must always come from the Accounts
+# row so editing a transaction immediately updates the linked cheque slip.
+# Only cheque-specific metadata is preserved when auto slips are regenerated.
+AUTO_CHEQUE_METADATA_FIELDS = (
+    'time', 'location', 'account_number', 'account_name', 'nic_number',
+    'contact_number', 'cheque_no', 'bank', 'branch', 'notes', 'raw_text',
     'image_filename'
 )
+
+
+def _auto_cheque_identity_key(month_name, date_value, subject, occurrence=1):
+    """Stable identity for one cheque row while its amount changes.
+
+    Amount is deliberately excluded: an Accounts amount edit must update the same
+    cheque slip rather than creating a new/stale linked slip.
+    """
+    payload = '|'.join([
+        str(month_name or '').strip(),
+        _normalise_record_date(date_value),
+        ' '.join(str(subject or '').strip().lower().split()),
+        str(int(occurrence or 1)),
+    ])
+    return hashlib.sha1(payload.encode('utf-8')).hexdigest()
 
 
 def sync_auto_cheque_deposits_from_records(month_name):
@@ -301,7 +749,9 @@ def sync_auto_cheque_deposits_from_records(month_name):
         deposits = load_cheque_deposits()
 
         old_auto_by_source = {}
+        old_auto_by_identity = {}
         hidden_by_source = {}
+        hidden_by_identity = {}
 
         # Capture current auto state before rebuilding it.  Older generated rows may
         # not yet have source_key/source_occurrence, so derive a compatible key.
@@ -321,10 +771,19 @@ def sync_auto_cheque_deposits_from_records(month_name):
                 )
                 entry['source_key'] = source_key
 
+            identity_key = _auto_cheque_identity_key(
+                month_name,
+                entry.get('source_date') or entry.get('date'),
+                entry.get('source_subject') or '',
+                entry.get('source_occurrence', 1),
+            )
+
             if entry.get('auto_hidden'):
                 hidden_by_source[source_key] = entry
+                hidden_by_identity[identity_key] = entry
             else:
                 old_auto_by_source[source_key] = entry
+                old_auto_by_identity[identity_key] = entry
 
         # Remove generated rows for this month, then put hidden tombstones back.
         for dep_id in list(deposits.keys()):
@@ -365,8 +824,13 @@ def sync_auto_cheque_deposits_from_records(month_name):
                 month_name, date_value, subject, in_payment, out_payment, occurrence
             )
 
-            # Respect an explicit user deletion even if the UTA reference changed.
-            if source_key in hidden_by_source:
+            identity_key = _auto_cheque_identity_key(
+                month_name, date_value, subject, occurrence
+            )
+
+            # Respect an explicit user deletion even when only the source amount
+            # changes. This avoids a deleted slip silently reappearing after an edit.
+            if source_key in hidden_by_source or identity_key in hidden_by_identity:
                 continue
 
             # A manual deposit explicitly linked to this UTA reference takes priority.
@@ -375,7 +839,8 @@ def sync_auto_cheque_deposits_from_records(month_name):
                 if manual.get('month') != month_name or manual.get('auto_generated') or manual.get('auto_hidden'):
                     continue
                 manual_ref = str(
-                    manual.get('source_ref')
+                    manual.get('linked_ref')
+                    or manual.get('source_ref')
                     or manual.get('reference_number')
                     or manual.get('transaction_id')
                     or ''
@@ -383,13 +848,26 @@ def sync_auto_cheque_deposits_from_records(month_name):
                 if manual_ref and manual_ref == ref_no.upper():
                     manually_linked = True
                     break
+                if manual.get('manual_hidden'):
+                    hidden_date = _normalise_record_date(manual.get('date'))
+                    hidden_amount = _normalise_cheque_amount(manual.get('amount'))
+                    if hidden_date == date_value and hidden_amount == _normalise_cheque_amount(in_payment):
+                        manually_linked = True
+                        break
             if manually_linked:
                 continue
 
             amount = in_payment if in_payment != 0 else out_payment
             direction = 'In Payment' if in_payment != 0 else 'Out Payment'
             dep_id = _auto_cheque_deposit_id(month_name, ref_no)
-            old_entry = old_auto_by_source.get(source_key) or {}
+            # Exact source match is preferred.  The amount-insensitive identity
+            # fallback keeps cheque-only metadata attached when the Accounts amount
+            # is edited, while the amount/date/reference themselves come from source.
+            old_entry = (
+                old_auto_by_source.get(source_key)
+                or old_auto_by_identity.get(identity_key)
+                or {}
+            )
 
             entry = {
                 'deposit_id': dep_id,
@@ -426,9 +904,11 @@ def sync_auto_cheque_deposits_from_records(month_name):
                 'updated_at': now_text,
             }
 
-            # Preserve fields the user explicitly edited on an auto-generated slip.
+            # Preserve only cheque-specific metadata. Source-bound fields such as
+            # amount/date/reference are intentionally NOT overlaid: Accounts is the
+            # canonical transaction source and both UI sections must stay identical.
             if old_entry.get('user_modified'):
-                for field in AUTO_CHEQUE_EDITABLE_FIELDS:
+                for field in AUTO_CHEQUE_METADATA_FIELDS:
                     if field in old_entry:
                         entry[field] = old_entry.get(field)
                 entry['user_modified'] = True
@@ -441,119 +921,95 @@ def sync_auto_cheque_deposits_from_records(month_name):
 
 
 def sync_cheque_deposits_to_excel(month_name, include_all=False):
+    """Write cheque deposits immediately below normal transactions in Records.
 
-    """Write cheque deposits below normal transactions in the SAME Records worksheet."""
+    Exactly two blank rows are kept between the last transaction and the cheque
+    section. Styled/previously-used empty rows are removed so exported workbooks do
+    not force users to scroll far down to find deposit history.
+    """
+    if not month_name:
+        return False
 
-    # Keep automatically linked cheque slips synchronized with the canonical records.
+    # First keep any manual deposit links current after UTA re-numbering, then build
+    # auto deposits for cheque-labelled Accounts rows that are not manually linked.
+    refresh_manual_cheque_links(month_name)
     sync_auto_cheque_deposits_from_records(month_name)
 
     filename = os.path.join(EXCEL_DIR, f"{month_name}.xlsx")
-
     if not os.path.exists(filename):
-
         return False
 
+    with RECORD_IO_LOCK:
+        wb = load_workbook(filename)
+        if 'Cheque Deposits' in wb.sheetnames:
+            del wb['Cheque Deposits']
 
+        ws = wb['Records'] if 'Records' in wb.sheetnames else wb.active
+        remove_cheque_section(ws)
 
-    wb = load_workbook(filename)
+        # Remove stale formatted blank rows left by earlier cheque sections/exports.
+        last_record_row = _last_meaningful_record_row(ws)
+        for merged in list(ws.merged_cells.ranges):
+            if merged.min_row > last_record_row:
+                ws.unmerge_cells(str(merged))
+        if ws.max_row > last_record_row:
+            ws.delete_rows(last_record_row + 1, ws.max_row - last_record_row)
 
-    if 'Cheque Deposits' in wb.sheetnames:
+        deposits = get_month_cheque_deposits(month_name)
+        if not include_all:
+            deposits = [d for d in deposits if d.get('excel_added')]
 
-        del wb['Cheque Deposits']
+        if deposits:
+            # Two clean blank lines, then deposit history.
+            marker_row = last_record_row + 3
+            ws.cell(marker_row, 1).value = CHEQUE_SECTION_MARKER
+            ws.merge_cells(start_row=marker_row, start_column=1, end_row=marker_row, end_column=6)
+            title_cell = ws.cell(marker_row, 1)
+            title_cell.fill = PatternFill(start_color='1A1A2E', end_color='1A1A2E', fill_type='solid')
+            title_cell.font = Font(bold=True, color='FFFFFF', size=12)
+            title_cell.alignment = Alignment(horizontal='left', vertical='center')
+            ws.row_dimensions[marker_row].height = 22
 
-    ws = wb['Records'] if 'Records' in wb.sheetnames else wb.active
+            headers = ['No', 'Date', 'Time', 'Deposit ID', 'Amount', 'Notes']
+            header_row = marker_row + 1
+            header_fill = PatternFill(start_color='D7193F', end_color='D7193F', fill_type='solid')
+            for col, header in enumerate(headers, start=1):
+                cell = ws.cell(header_row, col)
+                cell.value = header
+                cell.fill = header_fill
+                cell.font = Font(bold=True, color='FFFFFF')
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+            ws.row_dimensions[header_row].height = 20
 
-    remove_cheque_section(ws)
+            for idx, dep in enumerate(deposits, start=1):
+                row_no = header_row + idx
+                values = [
+                    idx,
+                    dep.get('date', ''),
+                    dep.get('time', ''),
+                    dep.get('deposit_id', ''),
+                    parse_amount(dep.get('amount', 0)),
+                    dep.get('notes', ''),
+                ]
+                for col, value in enumerate(values, start=1):
+                    ws.cell(row_no, col).value = value
+                ws.cell(row_no, 1).alignment = Alignment(horizontal='center', vertical='center')
+                ws.cell(row_no, 2).alignment = Alignment(horizontal='center', vertical='center')
+                ws.cell(row_no, 3).alignment = Alignment(horizontal='center', vertical='center')
+                ws.cell(row_no, 4).alignment = Alignment(horizontal='left', vertical='center')
+                ws.cell(row_no, 5).alignment = Alignment(horizontal='right', vertical='center')
+                ws.cell(row_no, 5).number_format = '#,##0.00'
+                ws.cell(row_no, 6).alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
+                ws.row_dimensions[row_no].height = 20
 
+            widths = {'A': 7, 'B': 14, 'C': 12, 'D': 26, 'E': 16, 'F': 42}
+            for col, width in widths.items():
+                current = ws.column_dimensions[col].width or 0
+                ws.column_dimensions[col].width = max(current, width)
 
-
-    deposits = get_month_cheque_deposits(month_name)
-
-    if not include_all:
-
-        deposits = [d for d in deposits if d.get('excel_added')]
-
-
-
-    if deposits:
-
-        ws.append([None])
-
-        marker_row = ws.max_row + 1
-
-        ws.append([CHEQUE_SECTION_MARKER])
-
-        ws.merge_cells(start_row=marker_row, start_column=1, end_row=marker_row, end_column=6)
-
-        title_cell = ws.cell(marker_row, 1)
-
-        title_cell.fill = PatternFill(start_color='1A1A2E', end_color='1A1A2E', fill_type='solid')
-
-        title_cell.font = Font(bold=True, color='FFFFFF', size=12)
-
-        title_cell.alignment = Alignment(horizontal='left')
-
-
-
-        headers = ['No', 'Date', 'Time', 'Deposit ID', 'Amount', 'Notes']
-
-        ws.append(headers)
-
-        header_row = ws.max_row
-
-        header_fill = PatternFill(start_color='D7193F', end_color='D7193F', fill_type='solid')
-
-        for col in range(1, 7):
-
-            cell = ws.cell(header_row, col)
-
-            cell.fill = header_fill
-
-            cell.font = Font(bold=True, color='FFFFFF')
-
-            cell.alignment = Alignment(horizontal='center')
-
-
-
-        for idx, dep in enumerate(deposits, start=1):
-
-            ws.append([
-
-                idx,
-
-                dep.get('date', ''),
-
-                dep.get('time', ''),
-
-                dep.get('deposit_id', ''),
-
-                parse_amount(dep.get('amount', 0)),
-
-                dep.get('notes', '')
-
-            ])
-
-            ws.cell(ws.max_row, 5).number_format = '#,##0.00'
-
-
-
-        widths = {'A': 7, 'B': 14, 'C': 12, 'D': 26, 'E': 16, 'F': 42}
-
-        for col, width in widths.items():
-
-            current = ws.column_dimensions[col].width or 0
-
-            ws.column_dimensions[col].width = max(current, width)
-
-
-
-    wb.save(filename)
-
-    wb.close()
-
+        _atomic_save_workbook(wb, filename)
+        wb.close()
     return True
-
-
 
 
 
@@ -2398,7 +2854,10 @@ def view_month_records(month_name):
 
         return "Month not found", 404
 
-    # Refresh cheque slips from cheque-labelled transaction rows before rendering.
+    # Keep both directions synchronized before rendering. Manual deposits follow
+    # their linked transaction's current reference/date/amount, while AUTO deposits
+    # are rebuilt from cheque-labelled Accounts rows.
+    refresh_manual_cheque_links(month_name)
     sync_auto_cheque_deposits_from_records(month_name)
 
     return render_template('view_month.html', 
@@ -2442,6 +2901,11 @@ def delete_record_from_month():
                 wb.close()
                 return jsonify({'success': False, 'message': 'Record not found. Refresh the page and try again.'}), 404
 
+            # Capture linked cheque slips BEFORE references are rebuilt. When the
+            # transaction is deleted, its cheque slip is the same business record and
+            # must disappear with it instead of becoming an orphan.
+            linked_deposit_ids = _linked_cheque_deposit_ids(month_name, ref_no)
+
             create_backup('delete_record', month_name)
             ws.delete_rows(row_to_delete)
             after_count = recalculate_and_sort_sheet(ws)
@@ -2451,13 +2915,16 @@ def delete_record_from_month():
 
             _atomic_save_workbook(wb, filename)
             wb.close()
+
+            linked_deposits_deleted = _delete_cheque_deposit_entries(linked_deposit_ids)
             sync_cheque_deposits_to_excel(month_name)
 
         return jsonify({
             'success': True,
-            'message': 'Record deleted. Dates, row numbers, references and balances were rebuilt successfully.',
+            'message': 'Record deleted. Dates, row numbers, references, balances and linked cheque slips were rebuilt successfully.',
             'total_records': after_count,
             'next_reference': f"UTA-{after_count + 1:02d}",
+            'linked_cheque_deposits_deleted': linked_deposits_deleted,
         })
     except Exception as e:
         print(f"Error deleting record: {e}")
@@ -2504,26 +2971,66 @@ def update_record_in_month():
                 wb.close()
                 return jsonify({'success': False, 'message': 'Record not found. Refresh the page and try again.'}), 404
 
+            linked_deposit_ids = _linked_cheque_deposit_ids(month_name, ref_no)
+            in_payment = parse_amount(data.get('in_payment', 0), 0)
+            out_payment = parse_amount(data.get('out_payment', 0), 0)
+
             create_backup('update_record', month_name)
+
+            # A temporary unique subject marker lets us follow THIS exact row through
+            # date sorting and UTA re-numbering. This is essential when several cheque
+            # rows have the same date/amount. The marker is never written to disk.
+            marker = f"__UTA_RECORD_EDIT__{hashlib.sha1((month_name + '|' + ref_no + '|' + datetime.now().isoformat()).encode('utf-8')).hexdigest()[:18]}"
             ws.cell(row_to_update, 3).value = date_value
-            ws.cell(row_to_update, 4).value = subject
-            ws.cell(row_to_update, 5).value = parse_amount(data.get('in_payment', 0), 0)
-            ws.cell(row_to_update, 6).value = parse_amount(data.get('out_payment', 0), 0)
+            ws.cell(row_to_update, 4).value = marker if linked_deposit_ids else subject
+            ws.cell(row_to_update, 5).value = in_payment
+            ws.cell(row_to_update, 6).value = out_payment
 
             after_count = recalculate_and_sort_sheet(ws)
             if after_count != before_count:
                 wb.close()
                 raise RuntimeError('Update integrity check failed. Nothing was saved.')
 
+            new_ref = ref_no
+            if linked_deposit_ids:
+                marker_row = None
+                for scan_row in range(3, ws.max_row + 1):
+                    if str(ws.cell(scan_row, 4).value or '') == marker:
+                        marker_row = scan_row
+                        break
+                if marker_row is None:
+                    wb.close()
+                    raise RuntimeError('Could not preserve the cheque transaction link during edit. Nothing was saved.')
+
+                new_ref = str(ws.cell(marker_row, 2).value or '').strip()
+                ws.cell(marker_row, 4).value = subject
+                final_count = recalculate_and_sort_sheet(ws)
+                if final_count != before_count:
+                    wb.close()
+                    raise RuntimeError('Final update integrity check failed. Nothing was saved.')
+                after_count = final_count
+
             _atomic_save_workbook(wb, filename)
             wb.close()
+
+            cheque_sync = _sync_manual_cheque_deposits_from_transaction(
+                linked_deposit_ids,
+                month_name,
+                new_ref,
+                date_value,
+                subject,
+                in_payment,
+                out_payment,
+            )
             sync_cheque_deposits_to_excel(month_name)
 
         return jsonify({
             'success': True,
-            'message': 'Record updated. Dates, row numbers, references and balances were rebuilt successfully.',
+            'message': 'Record updated. Dates, row numbers, references, balances and linked cheque slips were synchronized successfully.',
             'total_records': after_count,
             'next_reference': f"UTA-{after_count + 1:02d}",
+            'linked_cheque_deposits_updated': cheque_sync.get('updated', 0),
+            'linked_cheque_deposits_deleted': cheque_sync.get('deleted', 0),
         })
     except Exception as e:
         print(f"Error updating record: {e}")
@@ -2579,11 +3086,35 @@ def get_month_records(month_name):
 
 
 
-def recalculate_and_sort_sheet(ws):
-    """Canonicalise Accounts records into the 7-column layout.
+def _write_sheet_row(ws, row_no, values):
+    """Write values to an exact row without Worksheet.append side effects."""
+    for col_no, value in enumerate(values, start=1):
+        ws.cell(row_no, col_no).value = value
 
-    Columns are permanently: No, Ref No, Date, Subject, In Payment, Out Payment, Balance.
-    Legacy Pass No/Sub Agent columns are removed during this rebuild.
+
+def _append_transaction_row(ws, values):
+    """Append a normal Accounts row directly after the last meaningful Records row.
+
+    OpenPyXL's Worksheet.append can use a stale internal current-row value after row
+    deletions/rebuilds, which previously caused records to be written far below the
+    visible transaction table and later disappear/re-number incorrectly. This helper
+    always writes to an explicit physical row.
+    """
+    row_no = _last_meaningful_record_row(ws) + 1
+    _write_sheet_row(ws, row_no, values)
+    try:
+        ws._current_row = max(getattr(ws, '_current_row', 0), row_no)
+    except Exception:
+        pass
+    return row_no
+
+
+def recalculate_and_sort_sheet(ws):
+    """Canonicalise Accounts records into the 7-column layout deterministically.
+
+    Every rebuild writes physical rows 2..N explicitly. This avoids OpenPyXL's stale
+    append pointer after row deletion, the root cause of missing records, UTA gaps and
+    next-reference values jumping backwards after a successful save.
     """
     opening_row_data, transaction_items = _collect_normal_transactions(ws)
     if opening_row_data is None:
@@ -2591,8 +3122,20 @@ def recalculate_and_sort_sheet(ws):
 
     transaction_items.sort(key=lambda item: (_record_date_sort_key(item['row'][2]), item['source_order']))
 
+    # Accounts transaction rows never need merged cells. Remove any stale cheque
+    # merge that survived an older row deletion before rebuilding the sheet.
+    for merged in list(ws.merged_cells.ranges):
+        if merged.min_row >= 2:
+            ws.unmerge_cells(str(merged))
+
+    # Remove all data rows and stale cheque/export rows. Reset the append cursor too.
     if ws.max_row >= 2:
         ws.delete_rows(2, ws.max_row - 1)
+    try:
+        ws._current_row = 1
+    except Exception:
+        pass
+
     if ws.max_column > 7:
         ws.delete_cols(8, ws.max_column - 7)
 
@@ -2604,20 +3147,27 @@ def recalculate_and_sort_sheet(ws):
         cell.value = header
         cell.fill = header_fill
         cell.font = header_font
-        cell.alignment = Alignment(horizontal='center')
+        cell.alignment = Alignment(horizontal='center', vertical='center')
 
     opening_balance = parse_amount(opening_row_data[6], 0)
     opening_date = _normalise_record_date(opening_row_data[2])
-    ws.append([1, 'OPENING', opening_date, opening_row_data[3] or 'OPENING BALANCE', 0, 0, opening_balance])
+    _write_sheet_row(ws, 2, [
+        1,
+        'OPENING',
+        opening_date,
+        opening_row_data[3] or 'OPENING BALANCE',
+        0,
+        0,
+        opening_balance,
+    ])
 
-    opening_row_idx = ws.max_row
     opening_fill = PatternFill(start_color='E8F5E9', end_color='E8F5E9', fill_type='solid')
     opening_font = Font(bold=True, color='2E7D32')
     for col in range(1, 8):
-        ws.cell(opening_row_idx, col).fill = opening_fill
-        ws.cell(opening_row_idx, col).font = opening_font
+        ws.cell(2, col).fill = opening_fill
+        ws.cell(2, col).font = opening_font
     for col in [5, 6, 7]:
-        ws.cell(opening_row_idx, col).number_format = '#,##0'
+        ws.cell(2, col).number_format = '#,##0'
 
     balance = opening_balance
     for index, item in enumerate(transaction_items, start=1):
@@ -2625,9 +3175,10 @@ def recalculate_and_sort_sheet(ws):
         in_payment = parse_amount(row[4], 0)
         out_payment = parse_amount(row[5], 0)
         balance += in_payment - out_payment
-        ws.append([
+        physical_row = index + 2
+        _write_sheet_row(ws, physical_row, [
             index + 1,
-            f"UTA-{index:02d}",
+            f'UTA-{index:02d}',
             _normalise_record_date(row[2]),
             str(row[3] or '').strip(),
             in_payment,
@@ -2635,7 +3186,13 @@ def recalculate_and_sort_sheet(ws):
             balance,
         ])
         for col in [5, 6, 7]:
-            ws.cell(ws.max_row, col).number_format = '#,##0'
+            ws.cell(physical_row, col).number_format = '#,##0'
+
+    final_row = len(transaction_items) + 2
+    try:
+        ws._current_row = final_row
+    except Exception:
+        pass
 
     ws.column_dimensions['A'].width = 8
     ws.column_dimensions['B'].width = 12
@@ -2646,8 +3203,6 @@ def recalculate_and_sort_sheet(ws):
     ws.column_dimensions['G'].width = 16
 
     return len(transaction_items)
-
-
 
 
 
@@ -2761,16 +3316,20 @@ def save_records():
                 # Remove all normal rows, then rebuild from the import only.
                 if ws.max_row >= 2:
                     ws.delete_rows(2, ws.max_row - 1)
-                ws.append([1, 'OPENING', opening_date, 'OPENING BALANCE', 0, 0, opening_balance])
+                _write_sheet_row(ws, 2, [1, 'OPENING', opening_date, 'OPENING BALANCE', 0, 0, opening_balance])
+                try:
+                    ws._current_row = 2
+                except Exception:
+                    pass
 
                 for record in cleaned_records:
-                    ws.append([0, 'PENDING', record['date'], record['subject'], record['in_payment'], record['out_payment'], 0])
+                    _append_transaction_row(ws, [0, 'PENDING', record['date'], record['subject'], record['in_payment'], record['out_payment'], 0])
 
                 after_count = recalculate_and_sort_sheet(ws)
                 expected_count = len(cleaned_records)
             else:
                 for record in cleaned_records:
-                    ws.append([0, 'PENDING', record['date'], record['subject'], record['in_payment'], record['out_payment'], 0])
+                    _append_transaction_row(ws, [0, 'PENDING', record['date'], record['subject'], record['in_payment'], record['out_payment'], 0])
                 after_count = recalculate_and_sort_sheet(ws)
                 expected_count = before_count + len(cleaned_records)
 
@@ -3066,6 +3625,15 @@ def save_cheque_deposit():
 
             'source_out_payment': existing.get('source_out_payment', 0),
 
+            # Link metadata for manual cheque deposits that are also normal Accounts
+            # transactions. These fields live only in cheque_deposits.json; the
+            # visible Records worksheet remains the requested 7-column layout.
+            'linked_ref': existing.get('linked_ref', ''),
+
+            'linked_month': existing.get('linked_month', active_month),
+
+            'linked_transaction_created': bool(existing.get('linked_transaction_created', False)),
+
             'created_by': existing.get('created_by') or get_accounts_user(),
 
             'created_at': existing.get('created_at') or datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -3075,27 +3643,37 @@ def save_cheque_deposit():
         }
 
         deposits[deposit_id] = entry
-
         save_cheque_deposits(deposits)
 
-
+        # If this saved manual deposit was already added to Excel, keep its linked
+        # normal Accounts transaction updated as the user edits the deposit. Auto
+        # deposits already originate from Accounts records and must never duplicate.
+        link_result = None
+        if entry['excel_added'] and not entry.get('auto_generated'):
+            link_result = upsert_manual_cheque_transaction(entry)
+            entry['linked_ref'] = link_result.get('linked_ref', entry.get('linked_ref', ''))
+            entry['linked_month'] = active_month
+            entry['linked_transaction_created'] = bool(
+                entry.get('linked_transaction_created') or link_result.get('created')
+            )
+            deposits = load_cheque_deposits()
+            deposits[deposit_id] = entry
+            save_cheque_deposits(deposits)
 
         if entry['excel_added']:
-
             sync_cheque_deposits_to_excel(active_month)
 
-
+        message = 'Cheque deposit saved successfully.'
+        if link_result and entry.get('linked_ref'):
+            message = f"Cheque deposit saved and transaction {entry['linked_ref']} updated successfully."
 
         return jsonify({
-
             'success': True,
-
-            'message': 'Cheque deposit saved successfully.',
-
+            'message': message,
             'deposit_id': deposit_id,
-
-            'deposit': entry
-
+            'deposit': entry,
+            'transaction_ref': entry.get('linked_ref', ''),
+            'next_reference': (link_result or {}).get('next_reference', ''),
         })
 
     except Exception as e:
@@ -3107,46 +3685,65 @@ def save_cheque_deposit():
 
 
 @app.route('/add_cheque_deposit_to_excel', methods=['POST'])
-
 @login_required
-
 def add_cheque_deposit_to_excel():
+    """Add a saved cheque deposit to Accounts exactly once.
 
+    Manual cheque deposits become a normal Accounts transaction (Subject=Cheque,
+    In Payment=deposit amount) and also remain in the cheque-deposit history section.
+    Auto-generated deposits already come from an Accounts transaction, so they are
+    never inserted a second time.
+    """
     try:
-
         data = request.get_json(silent=True) or {}
-
         deposit_id = str(data.get('deposit_id', '')).strip()
-
         deposits = load_cheque_deposits()
 
         if deposit_id not in deposits:
-
             return jsonify({'success': False, 'message': 'Save the cheque deposit first.'}), 404
 
-
-
         entry = deposits[deposit_id]
+        month_name = str(entry.get('month') or '').strip()
+        if not month_name:
+            return jsonify({'success': False, 'message': 'Cheque deposit month is missing.'}), 400
 
-        month_name = entry.get('month')
+        link_result = None
+        if not entry.get('auto_generated'):
+            link_result = upsert_manual_cheque_transaction(entry)
+            entry['linked_ref'] = link_result.get('linked_ref', entry.get('linked_ref', ''))
+            entry['linked_month'] = month_name
+            entry['linked_transaction_created'] = bool(
+                entry.get('linked_transaction_created') or link_result.get('created')
+            )
+        else:
+            # It already represents an existing Accounts row.
+            entry['linked_ref'] = entry.get('source_ref') or entry.get('linked_ref', '')
+            entry['linked_month'] = month_name
 
         entry['excel_added'] = True
-
         entry['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
+        deposits = load_cheque_deposits()
         deposits[deposit_id] = entry
-
         save_cheque_deposits(deposits)
 
+        # Rebuild the compact cheque-history section after the normal transaction is
+        # safely committed. This also refreshes links after any UTA re-numbering.
         sync_cheque_deposits_to_excel(month_name)
 
-        return jsonify({'success': True, 'message': 'Added to the existing Records Excel sheet.'})
+        transaction_ref = entry.get('linked_ref') or entry.get('source_ref') or ''
+        if transaction_ref:
+            message = f'Added to Accounts as {transaction_ref} and updated cheque deposit history.'
+        else:
+            message = 'Cheque deposit history updated successfully.'
 
+        return jsonify({
+            'success': True,
+            'message': message,
+            'transaction_ref': transaction_ref,
+            'next_reference': (link_result or {}).get('next_reference', ''),
+        })
     except Exception as e:
-
         return jsonify({'success': False, 'message': f'Error adding to Excel: {str(e)}'}), 500
-
-
 
 
 
@@ -3173,9 +3770,11 @@ def delete_cheque_deposit():
                 except OSError:
                     pass
 
+        linked_transaction_deleted = False
+
         if entry.get('auto_generated'):
-            # Auto rows are normally rebuilt from Accounts records.  Keep a hidden
-            # tombstone so an explicit user deletion remains deleted after sync.
+            # Auto rows are rebuilt from Accounts transactions. Keep a hidden source
+            # tombstone so an explicit user deletion does not immediately reappear.
             source_key = entry.get('source_key') or _auto_cheque_source_key(
                 month_name,
                 entry.get('source_date') or entry.get('date'),
@@ -3202,7 +3801,22 @@ def delete_cheque_deposit():
             del deposits[deposit_id]
             deposits[_auto_cheque_hidden_key(source_key)] = hidden
         else:
-            del deposits[deposit_id]
+            # If this manual deposit created its own normal Accounts row, delete that
+            # linked row too so the two views cannot drift apart. If it was merely
+            # linked to an already-existing imported transaction, keep the Accounts
+            # row but preserve a hidden manual tombstone to prevent auto recreation.
+            if entry.get('excel_added') and entry.get('linked_transaction_created'):
+                linked_transaction_deleted = delete_linked_manual_cheque_transaction(entry)
+                del deposits[deposit_id]
+            elif entry.get('excel_added') and entry.get('linked_ref'):
+                hidden = dict(entry)
+                hidden['manual_hidden'] = True
+                hidden['deposit_id'] = deposit_id
+                hidden['deleted_by'] = get_accounts_user()
+                hidden['deleted_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                deposits[deposit_id] = hidden
+            else:
+                del deposits[deposit_id]
 
         save_cheque_deposits(deposits)
 
@@ -3213,6 +3827,7 @@ def delete_cheque_deposit():
             'success': True,
             'message': 'Cheque deposit deleted successfully.',
             'auto_generated': bool(entry.get('auto_generated')),
+            'linked_transaction_deleted': linked_transaction_deleted,
         })
 
     except Exception as e:
