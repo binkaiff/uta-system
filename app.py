@@ -2413,6 +2413,17 @@ def candidate_salary_slip_delete_api(slip_id):
     return jsonify({'success': True, 'message': 'Salary slip deleted successfully.'})
 
 
+def group_months_by_year(months_data):
+    """Group existing month entries for display only; do not move stored files."""
+    yearly_months = {}
+    for month_name, month_data in months_data.items():
+        year = month_name.rsplit('_', 1)[-1]
+        if not (len(year) == 4 and year.isdigit()):
+            year = str(month_data.get('created_date', ''))[:4]
+        yearly_months.setdefault(year, {})[month_name] = month_data
+    return dict(sorted(yearly_months.items(), reverse=True))
+
+
 @app.route('/dashboard')
 
 @login_required
@@ -2430,6 +2441,8 @@ def dashboard():
     return render_template('dashboard.html', 
 
                          months_data=months_data, 
+
+                         yearly_months=group_months_by_year(months_data),
 
                          active_month=active_month,
 
@@ -2836,7 +2849,7 @@ def view_records():
 
     months_data = load_months_data()
 
-    return render_template('view_records.html', months_data=months_data)
+    return render_template('view_records.html', months_data=months_data, yearly_months=group_months_by_year(months_data))
 
 
 

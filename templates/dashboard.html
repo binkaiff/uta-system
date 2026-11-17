@@ -444,17 +444,38 @@
 
                     <div>
 
-                        <h2>All Months</h2>
+                        <h2 id="yearsHeading">All Years</h2>
 
-                        <p>View and manage all monthly records</p>
+                        <p id="yearsDescription">Select a year to view monthly records</p>
 
                     </div>
 
+                    <button type="button" class="year-back-button" id="yearBackButton" onclick="backToYears()" hidden>
+                        <i class="fas fa-arrow-left"></i> All Years
+                    </button>
+
                 </div>
 
-                <div class="months-grid" id="monthsGrid">
+                <div class="year-folders-grid" id="yearFolders">
+                    {% for year, year_months in yearly_months.items() %}
+                    <button type="button" class="year-folder-card" onclick="showYear('{{ year }}')" aria-label="Open records for {{ year }}">
+                        <span class="year-folder-icon"><i class="fas fa-folder"></i></span>
+                        <span class="year-folder-info">
+                            <strong>{{ year }}</strong>
+                            <small>{{ year_months|length }} Month{{ 's' if year_months|length != 1 else '' }}</small>
+                        </span>
+                        <i class="fas fa-chevron-right year-folder-arrow"></i>
+                    </button>
+                    {% else %}
+                    <p class="year-empty-message">No months found. Create a new month to get started.</p>
+                    {% endfor %}
+                </div>
 
-                    {% for month_name, month_data in months_data.items() %}
+                {% for year, year_months in yearly_months.items() %}
+                <div class="year-months-panel" id="year-panel-{{ year }}" hidden>
+                <div class="months-grid" id="monthsGrid-{{ year }}">
+
+                    {% for month_name, month_data in year_months.items() %}
 
                         <div class="month-card {% if month_data.status == 'closed' %}closed{% endif %}">
 
@@ -521,6 +542,8 @@
                     {% endfor %}
 
                 </div>
+                </div>
+                {% endfor %}
 
             </div>
 
@@ -880,6 +903,28 @@
 
             });
 
+        }
+
+
+        // Display folders first; open a year to show only its months.
+        function showYear(year) {
+            document.getElementById('yearFolders').hidden = true;
+            document.querySelectorAll('.year-months-panel').forEach(panel => {
+                panel.hidden = panel.id !== `year-panel-${year}`;
+            });
+            document.getElementById('yearBackButton').hidden = false;
+            document.getElementById('yearsHeading').textContent = `${year} Months`;
+            document.getElementById('yearsDescription').textContent = 'View and manage monthly records for ' + year;
+        }
+
+        function backToYears() {
+            document.querySelectorAll('.year-months-panel').forEach(panel => {
+                panel.hidden = true;
+            });
+            document.getElementById('yearFolders').hidden = false;
+            document.getElementById('yearBackButton').hidden = true;
+            document.getElementById('yearsHeading').textContent = 'All Years';
+            document.getElementById('yearsDescription').textContent = 'Select a year to view monthly records';
         }
 
         function viewMonth(monthName) {
