@@ -459,12 +459,22 @@
                 <div class="year-folders-grid" id="yearFolders">
                     {% for year, year_months in yearly_months.items() %}
                     <button type="button" class="year-folder-card" onclick="showYear('{{ year }}')" aria-label="Open records for {{ year }}">
-                        <span class="year-folder-icon"><i class="fas fa-folder"></i></span>
-                        <span class="year-folder-info">
-                            <strong>{{ year }}</strong>
-                            <small>{{ year_months|length }} Month{{ 's' if year_months|length != 1 else '' }}</small>
+                        <span class="uta-archive-card-top">
+                            <span class="year-folder-icon"><i class="fas fa-folder-open"></i></span>
+                            <span class="uta-archive-tag">UTA FINANCE</span>
                         </span>
-                        <i class="fas fa-chevron-right year-folder-arrow"></i>
+                        <span class="uta-archive-card-main">
+                            <span class="year-folder-info">
+                                <span class="uta-archive-caption">FINANCIAL YEAR</span>
+                                <strong>{{ year }}</strong>
+                                <small><i class="far fa-calendar-alt"></i> {{ year_months|length }} Month{{ 's' if year_months|length != 1 else '' }} Recorded</small>
+                            </span>
+                            <span class="uta-archive-arrow"><i class="fas fa-chevron-right"></i></span>
+                        </span>
+                        <span class="uta-archive-card-bottom">
+                            <span>Browse monthly records</span>
+                            <i class="fas fa-arrow-right"></i>
+                        </span>
                     </button>
                     {% else %}
                     <p class="year-empty-message">No months found. Create a new month to get started.</p>

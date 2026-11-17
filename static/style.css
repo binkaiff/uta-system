@@ -5163,3 +5163,151 @@ body.excel-modal-open {
     .year-folders-grid { grid-template-columns: 1fr; }
     .year-folder-card { min-height: 106px; padding: 18px; }
 }
+
+/* UTA_PRO_YEAR_ARCHIVE_START */
+/* Scoped to the Year archive cards on Dashboard + View Records only. */
+.year-folders-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(305px, 1fr));
+    gap: 22px;
+    margin: 22px 0 26px;
+}
+.year-folder-card {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-height: 236px;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid #dce3ee;
+    border-radius: 18px;
+    background: #ffffff;
+    box-shadow: 0 7px 22px rgba(20, 29, 54, .055);
+    text-align: left;
+    font-family: inherit;
+    cursor: pointer;
+    transform: translateY(0);
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+.year-folder-card:hover {
+    transform: translateY(-4px);
+    border-color: #d9a7b3;
+    box-shadow: 0 18px 36px rgba(20, 29, 54, .13);
+}
+.year-folder-card:focus-visible {
+    outline: 3px solid #e64b68;
+    outline-offset: 3px;
+}
+.uta-archive-card-top {
+    width: 100%;
+    min-height: 85px;
+    padding: 19px 23px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-sizing: border-box;
+    background: linear-gradient(115deg, #172038 0%, #29344f 72%, #39425a 100%);
+    position: relative;
+    isolation: isolate;
+}
+.uta-archive-card-top::after {
+    content: '';
+    position: absolute;
+    right: -36px;
+    top: -70px;
+    width: 175px;
+    height: 175px;
+    border: 1px solid rgba(255,255,255,.13);
+    border-radius: 50%;
+    z-index: -1;
+}
+.year-folder-card .year-folder-icon {
+    display: inline-flex;
+    width: 48px;
+    height: 48px;
+    flex: 0 0 48px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 13px;
+    background: linear-gradient(145deg, #f33b5b, #b80f32);
+    color: #fff;
+    box-shadow: 0 8px 17px rgba(12, 14, 27, .2);
+    font-size: 22px;
+}
+.uta-archive-tag {
+    color: #c7cfdf;
+    font-size: 10px;
+    line-height: 1.2;
+    font-weight: 750;
+    letter-spacing: 1.4px;
+}
+.uta-archive-card-main {
+    width: 100%;
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 24px 16px;
+    box-sizing: border-box;
+}
+.year-folder-card .year-folder-info { display: flex; flex-direction: column; gap: 5px; }
+.uta-archive-caption {
+    font-size: 10px;
+    font-weight: 800;
+    color: #8993a7;
+    letter-spacing: 1.2px;
+}
+.year-folder-card .year-folder-info strong {
+    color: #172038;
+    font-size: 34px;
+    line-height: 1.1;
+    font-weight: 800;
+    letter-spacing: -.9px;
+}
+.year-folder-card .year-folder-info small {
+    font-size: 13px;
+    line-height: 1.4;
+    color: #607086;
+    font-weight: 500;
+}
+.year-folder-card .year-folder-info small i { color: #ce254a; margin-right: 5px; }
+.uta-archive-arrow {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #fff0f3;
+    color: #c11d42;
+    font-size: 12px;
+    transition: transform .2s ease, background .2s ease;
+}
+.year-folder-card:hover .uta-archive-arrow {
+    transform: translateX(3px);
+    background: #fbdbe3;
+}
+.uta-archive-card-bottom {
+    width: 100%;
+    min-height: 42px;
+    padding: 10px 24px;
+    border-top: 1px solid #edf0f5;
+    background: #fbfcfe;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-sizing: border-box;
+    color: #c11d42;
+    font-size: 12px;
+    font-weight: 700;
+}
+.uta-archive-card-bottom i { font-size: 12px; }
+@media (max-width: 600px) {
+    .year-folders-grid { grid-template-columns: 1fr; gap: 15px; }
+    .year-folder-card { min-height: 220px; }
+    .uta-archive-card-top { min-height: 77px; padding: 15px 20px; }
+    .uta-archive-card-main { padding: 17px 20px; }
+    .uta-archive-card-bottom { padding-left: 20px; padding-right: 20px; }
+}
+/* UTA_PRO_YEAR_ARCHIVE_END */

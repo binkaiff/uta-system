@@ -4151,6 +4151,91 @@ def delete_backup_month():
 
 
 
+# UTA_STYLED_DOWNLOAD_START
+
+def _uta_make_styled_download(filename):
+    """Format an in-memory download; leave the stored Excel workbook unchanged.
+
+    Keep the existing 7-column ledger, its opening balance and transactions,
+    and any cheque section exactly as they are. This only changes appearance.
+    """
+    from openpyxl.styles import Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = load_workbook(filename)
+    ws = wb.active
+    navy = '1A223B'
+    ink = '25304B'
+    muted = '59667D'
+    pale = 'F4F7FB'
+    rule = 'E4E9F1'
+    green_bg = 'EBF7EE'
+    green_ink = '227A3D'
+    highlight = 'C61D40'
+    fine_border = Border(bottom=Side(style='hair', color=rule))
+    normal_end = find_cheque_section_row(ws)
+    normal_end = normal_end - 1 if normal_end else ws.max_row
+
+    # Maintain the exact column sequence used by existing UTA records.
+    widths = {'A': 8, 'B': 14, 'C': 15, 'D': 39,
+              'E': 18, 'F': 18, 'G': 19}
+    for letter, width in widths.items():
+        ws.column_dimensions[letter].width = width
+
+    ws.row_dimensions[1].height = 29
+    for col in range(1, 8):
+        c = ws.cell(1, col)
+        c.fill = PatternFill(fill_type='solid', fgColor=navy)
+        c.font = Font(name='Aptos', size=11, bold=True, color='FFFFFF')
+        c.alignment = Alignment(
+            horizontal='left' if col in (2, 4) else 'center',
+            vertical='center', indent=1 if col in (2, 4) else 0)
+        c.border = Border(bottom=Side(style='medium', color=highlight))
+
+    for row in range(2, normal_end + 1):
+        is_opening = str(ws.cell(row, 2).value or '').strip().upper() == 'OPENING'
+        ws.row_dimensions[row].height = 23 if is_opening else 20
+        row_bg = green_bg if is_opening else ('FFFFFF' if row % 2 else pale)
+        for col in range(1, 8):
+            c = ws.cell(row, col)
+            c.fill = PatternFill(fill_type='solid', fgColor=row_bg)
+            c.font = Font(name='Aptos', size=10, bold=is_opening,
+                          color=green_ink if is_opening else ink)
+            c.border = fine_border
+            c.alignment = Alignment(
+                vertical='center',
+                horizontal=('right' if col in (1, 5, 6, 7) else 'left'),
+                indent=1 if col in (2, 3, 4) else 0)
+        for col in (5, 6, 7):
+            ws.cell(row, col).number_format = '#,##0;[Red](#,##0);0'
+        date_cell = ws.cell(row, 3)
+        if hasattr(date_cell.value, 'strftime'):
+            date_cell.number_format = 'yyyy-mm-dd'
+
+    # Worksheet/print presentation only. Keep any cheque section as-is.
+    ws.sheet_view.showGridLines = False
+    ws.sheet_view.zoomScale = 90
+    ws.freeze_panes = 'A2'
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.orientation = 'landscape'
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.print_options.horizontalCentered = True
+    ws.print_title_rows = '1:1'
+    ws.sheet_properties.pageSetUpPr.autoPageBreaks = False
+    ws.print_area = 'A1:' + get_column_letter(max(7, ws.max_column)) + str(ws.max_row)
+
+    result = BytesIO()
+    try:
+        wb.save(result)
+        result.seek(0)
+        return result
+    finally:
+        wb.close()
+
+# UTA_STYLED_DOWNLOAD_END
+
 @app.route('/download_excel/<month_name>')
 @login_required
 def download_excel(month_name):
@@ -4162,8 +4247,8 @@ def download_excel(month_name):
         repair_month_records_file(month_name, sync_cheques=False)
         month_info = load_months_data().get(month_name, {})
         sync_cheque_deposits_to_excel(month_name, include_all=(month_info.get('status') == 'closed'))
-        apply_excel_amount_format(filename)
-        return send_file(filename, as_attachment=True, download_name=f'UTA_{month_name}.xlsx')
+        download_buffer = _uta_make_styled_download(filename)
+        return send_file(download_buffer, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name=f'UTA_{month_name}.xlsx')
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
