@@ -2095,6 +2095,21 @@ def logout():
     return redirect(url_for('login_page'))
 
 
+@app.route('/candidate/open')
+@login_required
+def open_candidate_from_accounts():
+    """Open Candidates using an already-authorized Accounts login."""
+    username = get_accounts_user()
+    if username not in CANDIDATE_USERS:
+        return jsonify({'success': False, 'message': 'Candidate access is not allowed for this account.'}), 403
+
+    session.permanent = False
+    session['candidate_user'] = username
+    session['candidate_login_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    session['last_system'] = 'candidate'
+    return redirect(url_for('candidate_dashboard'))
+
+
 @app.route('/candidate/dashboard')
 @candidate_login_required
 def candidate_dashboard():
@@ -4296,5 +4311,3 @@ if __name__ == '__main__':
         else:
 
             raise
-
-
