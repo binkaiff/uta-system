@@ -23,6 +23,7 @@ async function initializeInvoicePage() {
         await loadNextInvoiceNumber();
         addItem('', 1, 0);
         previewInvoice();
+        window.UTA_CANDIDATE_TAB_DRAFT?.restore(); // UTA_CANDIDATE_TAB_DRAFT_V1
     }
 }
 
@@ -62,6 +63,7 @@ async function loadInvoiceForEdit(invoiceId) {
         setEditMode(true);
         calculateTotals();
         previewInvoice();
+        window.UTA_CANDIDATE_TAB_DRAFT?.restore();
     } catch (error) {
         console.error(error);
         showInvoiceToast('Unable to load invoice.', 'error');
@@ -288,6 +290,7 @@ async function saveInvoice() {
             return;
         }
 
+        window.UTA_CANDIDATE_TAB_DRAFT?.clear();
         editingInvoiceId = Number(result.invoice.id);
         document.getElementById('invNumber').value = result.invoice.invoiceNo;
         document.getElementById('a4Content').innerHTML = generateReceiptHTML(result.invoice);
@@ -303,6 +306,7 @@ async function saveInvoice() {
 }
 
 async function resetForm() {
+    window.UTA_CANDIDATE_TAB_DRAFT?.clear();
     editingInvoiceId = null;
     window.history.replaceState({}, '', window.location.pathname);
     document.getElementById('clientName').value = '';

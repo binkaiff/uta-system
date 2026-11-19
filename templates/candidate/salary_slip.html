@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='candidate_salary_slip.css') }}">
 </head>
-<body>
+<body data-uta-draft-user="{{ current_user|e }}">
 <div class="dashboard-container">
     <aside class="sidebar">
         <div class="logo">
@@ -18,12 +18,82 @@
             <p>Manpower Service</p>
             <span class="license-badge">SLBFE Licensed</span>
         </div>
-        <nav class="nav-menu">
+                {# UTA_ACCOUNTS_CANDIDATE_NAV_V1 #}
+        {% if session.get("accounts_user") or (session.get("system") == "accounts" and session.get("user")) %}
+<nav class="nav-menu">
+
+                <a href="/dashboard" class="nav-item">
+
+                    <i class="fas fa-chart-line"></i>
+
+                    <span>Dashboard</span>
+
+                </a>
+
+                <a href="/enter" class="nav-item">
+
+                    <i class="fas fa-plus-circle"></i>
+
+                    <span>Enter Records</span>
+
+                </a>
+
+                <a href="/cheque-deposits" class="nav-item">
+
+                    <i class="fas fa-money-check-dollar"></i>
+
+                    <span>Cheque Deposits</span>
+
+                </a>
+
+                <a href="/view" class="nav-item">
+
+                    <i class="fas fa-table-list"></i>
+
+                    <span>View Records</span>
+
+                </a>
+                <details class="candidate-dropdown" open style="width:100%;">
+                    <summary class="nav-item active" style="cursor:pointer;list-style:none;">
+                        <i class="fas fa-users"></i>
+                        <span>Candidates</span>
+                        <i class="fas fa-chevron-down" aria-hidden="true" style="margin-left:auto;width:auto;font-size:12px;"></i>
+                    </summary>
+                    <div style="display:flex;flex-direction:column;gap:3px;padding:3px 0 4px 32px;">
+                        <a href="/candidate/open?page=invoice" style="display:flex;align-items:center;gap:10px;padding:9px 10px;color:rgba(255,255,255,.78);text-decoration:none;font-size:13px;font-weight:500;border-radius:8px;">
+                            <i class="fas fa-file-invoice" aria-hidden="true" style="width:18px;"></i><span>Invoice</span>
+                        </a>
+                        <a href="/candidate/open?page=salary-slip" aria-current="page" style="display:flex;align-items:center;gap:10px;padding:9px 10px;color:rgba(255,255,255,.78);text-decoration:none;font-size:13px;font-weight:500;border-radius:8px;">
+                            <i class="fas fa-money-bill-wave" aria-hidden="true" style="width:18px;"></i><span>Salary Slip</span>
+                        </a>
+                    </div>
+                </details>
+
+                <a href="/backup" class="nav-item">
+
+                    <i class="fas fa-box-archive"></i>
+
+                    <span>Backup</span>
+
+                </a>
+
+                <a href="/logout?system=accounts" class="nav-item logout-link" >
+
+                    <i class="fas fa-sign-out-alt"></i>
+
+                    <span>Logout</span>
+
+                </a>
+
+            </nav>
+        {% else %}
+<nav class="nav-menu">
             <a href="{{ url_for('candidate_dashboard') }}" class="nav-item"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
             <a href="{{ url_for('candidate_invoice') }}" class="nav-item"><i class="fas fa-file-invoice"></i><span>Invoice</span></a>
             <a href="{{ url_for('candidate_salary_slip') }}" class="nav-item active"><i class="fas fa-file-signature"></i><span>Salary Slip</span></a>
             <a href="{{ url_for('logout') }}" class="nav-item"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
         </nav>
+        {% endif %}
     </aside>
 
     <main class="main-content salary-slip-page">
@@ -176,6 +246,8 @@
     </div>
 </div>
 <div id="salaryToast" class="salary-toast" role="status" aria-live="polite"></div>
+<script>window.UTA_DRAFT_USER = document.body.dataset.utaDraftUser || "";</script>
+<script src="{{ url_for('static', filename='candidate_tab_drafts.js') }}?v=1"></script>
 <script src="{{ url_for('static', filename='candidate_salary_slip.js') }}"></script>
 </body>
 </html>

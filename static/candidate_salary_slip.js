@@ -29,7 +29,10 @@ async function initializeSalaryPage() {
 
     const editId = Number(new URLSearchParams(window.location.search).get('edit') || 0);
     if (editId) await loadSalarySlipForEdit(editId);
-    else addSalaryItem('Monthly Basic Salary for Working Days', 0);
+    else {
+        addSalaryItem('Monthly Basic Salary for Working Days', 0);
+        window.UTA_CANDIDATE_TAB_DRAFT?.restore(); // UTA_CANDIDATE_TAB_DRAFT_V1
+    }
 
     updateSalaryPreview();
     await loadSalaryHistory();
@@ -118,6 +121,7 @@ async function saveSalarySlip() {
             showSalaryToast(result.message || 'Unable to save salary slip.', 'error');
             return;
         }
+        window.UTA_CANDIDATE_TAB_DRAFT?.clear();
         editingSalarySlipId = Number(result.salarySlip.id);
         setSalaryEditMode(true);
         window.history.replaceState({}, '', `${window.location.pathname}?edit=${editingSalarySlipId}`);
@@ -153,6 +157,7 @@ async function loadSalarySlipForEdit(slipId) {
         items.forEach(item => addSalaryItem(item.description || '', Number(item.amount || 0)));
         setSalaryEditMode(true);
         updateSalaryPreview();
+        window.UTA_CANDIDATE_TAB_DRAFT?.restore();
     } catch (error) {
         console.error(error);
         showSalaryToast('Unable to load salary slip.', 'error');
@@ -169,6 +174,7 @@ function setSalaryEditMode(enabled) {
 }
 
 async function resetSalarySlip() {
+    window.UTA_CANDIDATE_TAB_DRAFT?.clear();
     editingSalarySlipId = null;
     window.history.replaceState({}, '', window.location.pathname);
     document.getElementById('employeeName').value = '';
